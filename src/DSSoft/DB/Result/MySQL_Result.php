@@ -2,38 +2,31 @@
 
 namespace DSSoft\DB\Result;
 
-class MySQL_Result implements ResultInterface
-{
+class MySQL_Result implements ResultInterface {
 
     private $_result;
 
-    public function __construct($result)
-    {
+    public function __construct($result) {
         $this->_result = $result;
     }
 
-    public function fetchAll($assoc = true)
-    {
+    public function fetchAll($assoc = true) {
         return $this->_result->fetch_all($assoc === true ? MYSQLI_ASSOC : MYSQLI_NUM);
     }
 
-    public function fetchAssoc()
-    {
+    public function fetchAssoc() {
         return $this->_result->fetch_assoc();
     }
 
-    public function fetchRow()
-    {
+    public function fetchRow() {
         return $this->_result->fetch_row();
     }
 
-    public function rowsCount()
-    {
+    public function rowsCount() {
         return $this->_result->num_rows;
     }
 
-    public function __destruct()
-    {
+    public function __destruct() {
         $this->_result->free();
     }
 }

@@ -2,8 +2,7 @@
 
 namespace DSSoft\DB\Driver;
 
-interface DBInterface
-{
+interface DBInterface {
 
     /**
      * Открывает новое соединени с сервером БД

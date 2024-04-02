@@ -2,8 +2,7 @@
 
 namespace DSSoft\DB\Result;
 
-interface ResultInterface
-{
+interface ResultInterface {
 
     public function __construct($result);
 

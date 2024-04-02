@@ -2,26 +2,25 @@
 
 namespace DSSoft;
 
-class DB
-{
+class DB {
 
     /**
      * Типы JOIN
      */
-    const LEFT_JOIN        = 'LEFT JOIN';
-    const RIGHT_JOIN       = 'RIGHT JOIN';
-    const INNER_JOIN       = 'INNER JOIN';
-    const STRAIGHT_JOIN    = 'STRAIGHT_JOIN';
-    const LEFT_OUTER_JOIN  = 'LEFT OUTER JOIN';
+    const LEFT_JOIN = 'LEFT JOIN';
+    const RIGHT_JOIN = 'RIGHT JOIN';
+    const INNER_JOIN = 'INNER JOIN';
+    const STRAIGHT_JOIN = 'STRAIGHT_JOIN';
+    const LEFT_OUTER_JOIN = 'LEFT OUTER JOIN';
     const RIGHT_OUTER_JOIN = 'RIGHT OUTER JOIN';
 
     /**
      * Уровни изоляций транзакций
      */
     const READ_UNCOMMITTED = 'READ UNCOMMITTED';
-    const READ_COMMITTED   = 'READ COMMITTED';
-    const REPEATABLE_READ  = 'REPEATABLE READ';
-    const SERIALIZABLE     = 'SERIALIZABLE';
+    const READ_COMMITTED = 'READ COMMITTED';
+    const REPEATABLE_READ = 'REPEATABLE READ';
+    const SERIALIZABLE = 'SERIALIZABLE';
 
     /**
      * Объект для работы с БД
@@ -40,48 +39,46 @@ class DB
      * @var DB\Debug
      */
     protected $_debug;
-    protected $_cache              = array( 'table_fields' => array() );
+    protected $_cache = array('table_fields' => array());
     //========================================================================//
-    public $table                  = '';
-    public $select                 = array( 'i.*' );
-    public $group_by               = '';
-    public $order_by               = '';
-    public $where                  = '';
-    public $where_separator        = 'AND';
-    public $index_action           = '';
-    public $limit                  = 1000;
-    public $distinct               = '';
-    public $straight_join          = '';
-    public $join                   = '';
-    public $read_type              = '';
-    public $perpage                = 50;
+    public $table = '';
+    public $select = array('i.*');
+    public $group_by = '';
+    public $order_by = '';
+    public $where = '';
+    public $where_separator = 'AND';
+    public $index_action = '';
+    public $limit = 1000;
+    public $distinct = '';
+    public $straight_join = '';
+    public $join = '';
+    public $read_type = '';
+    public $perpage = 50;
     public $is_transaction_started = false;
-    public $filter_on              = false;
-    public $keep_filters           = false;
-    public $query_quiet            = false;
+    public $filter_on = false;
+    public $keep_filters = false;
+    public $query_quiet = false;
 
-    public function __construct($host, $user, $password, $dbname, $type = 'MySQL', $options = array())
-    {
-        $this->db_type     = $type;
-        $this->db_host     = $host;
-        $this->db_user     = $user;
+    public function __construct($host, $user, $password, $dbname, $type = 'MySQL', $options = array()) {
+        $this->db_type = $type;
+        $this->db_host = $host;
+        $this->db_user = $user;
         $this->db_password = $password;
-        $this->db_name     = $dbname;
-        $this->options     = $options;
-        $this->_debug      = new DB\Debug();
+        $this->db_name = $dbname;
+        $this->options = $options;
+        $this->_debug = new DB\Debug();
 
-        if ( empty($this->options['table_prefix']) ) {
+        if (empty($this->options['table_prefix'])) {
             $this->options['table_prefix'] = '';
         }
 
         $this->connect();
     }
 
-    protected function connect()
-    {
+    protected function connect() {
         $class_name = '\\DSSoft\\DB\\Driver\\' . $this->db_type;
 
-        if ( !class_exists($class_name) ) {
+        if (!class_exists($class_name)) {
             return false;
         }
 
@@ -91,30 +88,26 @@ class DB
 
         $this->db->connect($this->db_host, $this->db_user, $this->db_password, $this->db_name, $this->options);
 
-        if ( $this->db->ConError() ) {
-            $this->_debug->error('CONNECT_DB', array( 'msg' => $this->db->ConError() ));
+        if ($this->db->ConError()) {
+            $this->_debug->error('CONNECT_DB', array('msg' => $this->db->ConError()));
             return false;
-        }
-        else {
-            $this->_debug->log('CONNECT_DB', array( 'msg' => 'SUCCESS' ));
+        } else {
+            $this->_debug->log('CONNECT_DB', array('msg' => 'SUCCESS'));
             return true;
         }
     }
 
-    public function reconnect($forced = false)
-    {
-        if ( $forced === true || !$this->db->status() ) {
+    public function reconnect($forced = false) {
+        if ($forced === true || !$this->db->status()) {
             $this->db->reconnect();
         }
     }
 
-    public function ConError()
-    {
+    public function ConError() {
         return $this->db->ConError();
     }
 
-    public function __destruct()
-    {
+    public function __destruct() {
         $this->db->close();
     }
 
@@ -125,9 +118,8 @@ class DB
      * @param string $table
      * @return array
      */
-    public function getTableFields($table)
-    {
-        if ( isset($this->_cache['table_fields'][$table]) ) {
+    public function getTableFields($table) {
+        if (isset($this->_cache['table_fields'][$table])) {
             return $this->_cache['table_fields'][$table];
         }
 
@@ -135,7 +127,7 @@ class DB
 
         $fields = array();
 
-        while ( $data = $result->fetchAssoc() ) {
+        while ($data = $result->fetchAssoc()) {
             $fields[] = $data['Field'];
         }
 
@@ -149,13 +141,12 @@ class DB
      * @param string $table
      * @return array
      */
-    public function getTableFieldsTypes($table)
-    {
+    public function getTableFieldsTypes($table) {
         $result = $this->query("SELECT DATA_TYPE, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '{#}" . $table . "'");
 
         $fields = [];
 
-        while ( $data = $result->fetchAssoc() ) {
+        while ($data = $result->fetchAssoc()) {
             $fields[$data['COLUMN_NAME']] = $data['DATA_TYPE'];
         }
 
@@ -173,19 +164,18 @@ class DB
      *
      * @return boolean|DB\Result\ResultInterface
      */
-    public function query($sql, $params = false, $quiet = false)
-    {
+    public function query($sql, $params = false, $quiet = false) {
         $this->_debug->startTimer('DB_QUERY');
 
         $sql = $this->replacePrefix($sql);
 
-        if ( $params ) {
-            if ( !is_array($params) ) {
-                $params = array( $params );
+        if ($params) {
+            if (!is_array($params)) {
+                $params = array($params);
             }
 
-            foreach ( $params as $index => $param ) {
-                if ( !is_numeric($param) ) {
+            foreach ($params as $index => $param) {
+                if (!is_numeric($param)) {
                     $params[$index] = $this->db->escape($param);
                 }
             }
@@ -195,14 +185,13 @@ class DB
 
         $result = $this->db->query($sql);
 
-        if ( $result === false && $this->db->Error() ) {
-            if ( $quiet || $this->query_quiet === true ) {
-                $this->_debug->error('DB_QUERY', array( 'msg' => $this->db->Error(), 'sql' => $sql ));
+        if ($result === false && $this->db->Error()) {
+            if ($quiet || $this->query_quiet === true) {
+                $this->_debug->error('DB_QUERY', array('msg' => $this->db->Error(), 'sql' => $sql));
                 return false;
             }
-        }
-        else {
-            $this->_debug->log('DB_QUERY', array( 'sql' => $sql ));
+        } else {
+            $this->_debug->log('DB_QUERY', array('sql' => $sql));
             return $result;
         }
 
@@ -211,23 +200,20 @@ class DB
 
     //========================================================================//
 
-    public function distinctSelect()
-    {
+    public function distinctSelect() {
         $this->distinct = 'DISTINCT';
 
         return $this;
     }
 
-    public function select($field, $as = false)
-    {
+    public function select($field, $as = false) {
         $this->select[] = $as ? $field . ' as `' . $as . '`' : $field;
 
         return $this;
     }
 
-    public function selectOnly($field, $as = false)
-    {
-        $this->select   = array();
+    public function selectOnly($field, $as = false) {
+        $this->select = array();
         $this->select[] = $as ? $field . ' as `' . $as . '`' : $field;
 
         return $this;
@@ -235,15 +221,13 @@ class DB
 
     //========================================================================//
 
-    public function getField($table_name, $row_id, $field_name)
-    {
+    public function getField($table_name, $row_id, $field_name) {
         $this->filterEqual('id', $row_id);
         return $this->getFieldFiltered($table_name, $field_name);
     }
 
-    public function getFieldFiltered($table_name, $field_name)
-    {
-        $this->select = array( $this->prepareFieldName($field_name) );
+    public function getFieldFiltered($table_name, $field_name) {
+        $this->select = array($this->prepareFieldName($field_name));
 
         $this->table = $table_name;
 
@@ -255,7 +239,7 @@ class DB
 
         $result = $this->query($sql);
 
-        if ( !$result->rowsCount() ) {
+        if (!$result->rowsCount()) {
             return false;
         }
 
@@ -264,29 +248,28 @@ class DB
 
     //========================================================================//
 
-    public function getItem($table_name, $item_callback = false)
-    {
+    public function getItem($table_name, $item_callback = false) {
         $select = implode(', ', $this->select);
 
         $sql = "SELECT {$select}
                 FROM {#}{$table_name} i
                 {$this->index_action}";
 
-        if ( $this->join ) {
+        if ($this->join) {
             $sql .= $this->join;
         }
 
-        if ( $this->where ) {
+        if ($this->where) {
             $sql .= 'WHERE ' . $this->where . PHP_EOL;
         }
 
-        if ( $this->order_by ) {
+        if ($this->order_by) {
             $sql .= 'ORDER BY ' . $this->order_by . PHP_EOL;
         }
 
         $sql .= 'LIMIT 1';
 
-        if ( $this->read_type ) {
+        if ($this->read_type) {
             $sql .= PHP_EOL . $this->read_type;
         }
 
@@ -294,61 +277,57 @@ class DB
 
         $result = $this->query($sql);
 
-        if ( !$result->rowsCount() ) {
+        if (!$result->rowsCount()) {
             return false;
         }
 
         $item = $result->fetchAssoc();
 
-        if ( is_callable($item_callback) ) {
-            $item = call_user_func_array($item_callback, array( $item, $this ));
+        if (is_callable($item_callback)) {
+            $item = call_user_func_array($item_callback, array($item, $this));
         }
 
         return $item;
     }
 
-    public function getItemById($table_name, $id, $item_callback = false)
-    {
+    public function getItemById($table_name, $id, $item_callback = false) {
         $this->filterEqual('id', $id);
         return $this->getItem($table_name, $item_callback);
     }
 
-    public function getItemByField($table_name, $field_name, $field_value, $item_callback = false)
-    {
+    public function getItemByField($table_name, $field_name, $field_value, $item_callback = false) {
         $this->filterEqual($field_name, $field_value);
         return $this->getItem($table_name, $item_callback);
     }
 
     //========================================================================//
 
-    public function getCount($table_name, $by_field = 'id', $reset = false)
-    {
+    public function getCount($table_name, $by_field = 'id', $reset = false) {
         $sql = "SELECT {$this->straight_join} COUNT({$this->distinct} i.{$by_field} )
                 FROM {#}{$table_name} i
                 {$this->index_action}";
 
-        if ( $this->join ) {
+        if ($this->join) {
             $sql .= $this->join;
         }
 
-        if ( $this->where ) {
+        if ($this->where) {
             $sql .= 'WHERE ' . $this->where . PHP_EOL;
         }
 
-        if ( $this->group_by ) {
+        if ($this->group_by) {
             $sql .= 'GROUP BY ' . $this->group_by . PHP_EOL;
         }
 
-        if ( $reset ) {
+        if ($reset) {
             $this->resetFilters();
         }
 
         $result = $this->query($sql);
 
-        if ( !$result->rowsCount() ) {
+        if (!$result->rowsCount()) {
             $count = 0;
-        }
-        else {
+        } else {
             $count = (int) $result->fetchRow()[0];
         }
 
@@ -361,8 +340,7 @@ class DB
      * Возвращает записи из базы, применяя все наложенные ранее фильтры
      * @return array
      */
-    public function get($table_name, $item_callback = false, $key_field = 'id')
-    {
+    public function get($table_name, $item_callback = false, $key_field = 'id') {
         $this->table = $table_name;
 
         $items = array();
@@ -373,25 +351,24 @@ class DB
 
         $result = $this->query($sql);
 
-        if ( !$result->rowsCount() ) {
+        if (!$result->rowsCount()) {
             return false;
         }
 
-        while ( $item = $result->fetchAssoc() ) {
+        while ($item = $result->fetchAssoc()) {
             $key = ($key_field && isset($item[$key_field])) ? $item[$key_field] : false;
 
-            if ( is_callable($item_callback) ) {
-                $item = call_user_func_array($item_callback, array( $item, $this ));
+            if (is_callable($item_callback)) {
+                $item = call_user_func_array($item_callback, array($item, $this));
 
-                if ( $item === false ) {
+                if ($item === false) {
                     continue;
                 }
             }
 
-            if ( $key ) {
+            if ($key) {
                 $items[$key] = $item;
-            }
-            else {
+            } else {
                 $items[] = $item;
             }
         }
@@ -401,15 +378,13 @@ class DB
 
     //========================================================================//
 
-    public function delete($table_name, $id, $by_field = 'id')
-    {
+    public function delete($table_name, $id, $by_field = 'id') {
         $this->filterEqual($by_field, $id);
 
         return $this->deleteFiltered($table_name);
     }
 
-    public function deleteFiltered($table_name)
-    {
+    public function deleteFiltered($table_name) {
         $where = $this->where;
 
         $this->resetFilters();
@@ -423,22 +398,19 @@ class DB
      * @param string $where Критерии запроса
      * @return boolean
      */
-    public function _delete($table_name, $where)
-    {
+    public function _delete($table_name, $where) {
         return $this->query("DELETE FROM {#}" . $table_name . " WHERE " . str_replace('i.', '', $where));
     }
 
     //========================================================================//
 
-    public function update($table_name, $id, $data, $skip_check_fields = false, $array_as = 'json')
-    {
+    public function update($table_name, $id, $data, $skip_check_fields = false, $array_as = 'json') {
         $this->filterEqual('id', $id);
 
         return $this->updateFiltered($table_name, $data, $skip_check_fields, $array_as);
     }
 
-    public function updateFiltered($table_name, $data, $skip_check_fields = false, $array_as = 'json')
-    {
+    public function updateFiltered($table_name, $data, $skip_check_fields = false, $array_as = 'json') {
         $where = $this->where;
 
         $this->resetFilters();
@@ -457,27 +429,26 @@ class DB
      *
      * @return boolean
      */
-    public function _update($table, $where, $data, $skip_check_fields = false, $array_as = 'json')
-    {
-        if ( empty($data) ) {
+    public function _update($table, $where, $data, $skip_check_fields = false, $array_as = 'json') {
+        if (empty($data)) {
             return false;
         }
 
-        if ( !$skip_check_fields ) {
+        if (!$skip_check_fields) {
             $table_fields = $this->getTableFields($table);
         }
 
         $set = [];
 
-        foreach ( $data as $field => $value ) {
-            if ( !$skip_check_fields && !in_array($field, $table_fields) ) {
+        foreach ($data as $field => $value) {
+            if (!$skip_check_fields && !in_array($field, $table_fields)) {
                 continue;
             }
 
             $set[] = "`" . $field . "` = " . $this->prepareValue($field, $value, $array_as);
         }
 
-        if ( !$set ) {
+        if (!$set) {
             return false;
         }
 
@@ -496,20 +467,19 @@ class DB
      * @param boolean $ignore Пропускать записи, если при вставке возникают ошибки (INSERT IGNORE)
      * @return boolean|int|string ID вставленной записи
      */
-    public function insert($table, $data, $skip_check_fields = false, $array_as = 'json', $ignore = false)
-    {
-        if ( empty($data) || !is_array($data) ) {
+    public function insert($table, $data, $skip_check_fields = false, $array_as = 'json', $ignore = false) {
+        if (empty($data) || !is_array($data)) {
             return false;
         }
 
-        if ( !$skip_check_fields ) {
+        if (!$skip_check_fields) {
             $table_fields = $this->getTableFields($table);
         }
 
         $fields = $values = [];
 
-        foreach ( $data as $field => $value ) {
-            if ( !$skip_check_fields && !in_array($field, $table_fields) ) {
+        foreach ($data as $field => $value) {
+            if (!$skip_check_fields && !in_array($field, $table_fields)) {
                 continue;
             }
 
@@ -517,13 +487,13 @@ class DB
             $values[] = $this->prepareValue($field, $value, $array_as);
         }
 
-        if ( !$fields ) {
+        if (!$fields) {
             return false;
         }
 
         $sql = "INSERT " . ($ignore ? 'IGNORE ' : '') . "INTO {#}" . $table . " (" . implode(', ', $fields) . ")\nVALUES (" . implode(', ', $values) . ")";
 
-        if ( $this->query($sql) ) {
+        if ($this->query($sql)) {
             return $this->db->lastId();
         }
 
@@ -541,33 +511,32 @@ class DB
      * @param string $array_as Преобразовать массив в строку с помошью json, yaml, serialize
      * @return boolean|int|string
      */
-    public function insertOrUpdate($table, $data, $update_data = false, $skip_check_fields = false, $array_as = 'json')
-    {
-        $fields = $values = $set    = [];
+    public function insertOrUpdate($table, $data, $update_data = false, $skip_check_fields = false, $array_as = 'json') {
+        $fields = $values = $set = [];
 
-        if ( is_array($data) ) {
-            foreach ( $data as $field => $value ) {
+        if (is_array($data)) {
+            foreach ($data as $field => $value) {
                 $value = $this->prepareValue($field, $value, $array_as);
 
                 $fields[] = "`" . $field . "`";
                 $values[] = $value;
 
-                if ( $update_data === false ) {
+                if ($update_data === false) {
                     $set[] = "`" . $field . "` = " . $value;
                 }
             }
 
             $sql = "INSERT INTO {#}" . $table . " (" . implode(', ', $fields) . ")\nVALUES (" . implode(', ', $values) . ")";
 
-            if ( is_array($update_data) ) {
-                foreach ( $update_data as $field => $value ) {
+            if (is_array($update_data)) {
+                foreach ($update_data as $field => $value) {
                     $set[] = "`" . $field . "` = " . $this->prepareValue($field, $value, $array_as);
                 }
             }
 
             $sql .= " ON DUPLICATE KEY UPDATE " . implode(', ', $set);
 
-            if ( $this->query($sql) ) {
+            if ($this->query($sql)) {
                 return $this->db->lastId();
             }
         }
@@ -577,14 +546,13 @@ class DB
 
     //========================================================================//
 
-    public function increment($table, $field, $step = 1)
-    {
+    public function increment($table, $field, $step = 1) {
         $sign = $step > 0 ? '+' : '-';
         $step = abs($step);
 
         $sql = "UPDATE {#}" . $table . " i " . PHP_EOL . "SET i." . $field . " = i." . $field . " " . $sign . " " . $step . PHP_EOL;
 
-        if ( $this->where ) {
+        if ($this->where) {
             $sql .= 'WHERE ' . $this->where;
         }
 
@@ -593,17 +561,15 @@ class DB
         return $this->query($sql, false, true);
     }
 
-    public function decrement($table, $field, $step = 1)
-    {
+    public function decrement($table, $field, $step = 1) {
         return $this->increment($table, $field, $step * -1);
     }
 
     //========================================================================//
 
-    public function replaceFieldString($table_name, $search, $replace, $field)
-    {
+    public function replaceFieldString($table_name, $search, $replace, $field) {
 
-        $search  = $this->db->escape($search);
+        $search = $this->db->escape($search);
         $replace = $this->db->escape($replace);
 
         return $this->query("UPDATE `{#}{$table_name}` SET `{$field}` = REPLACE(`{$field}`, '{$search}', '$replace') WHERE `{$field}` LIKE '%{$search}%'");
@@ -611,17 +577,16 @@ class DB
 
     //========================================================================//
 
-    public function limit($from, $howmany = 0)
-    {
+    public function limit($from, $howmany = 0) {
         $this->limit = (int) $from;
-        $howmany     = (int) $howmany;
+        $howmany = (int) $howmany;
 
-        if ( $this->limit < 0 ) {
+        if ($this->limit < 0) {
             $this->limit = 0;
         }
 
-        if ( $howmany ) {
-            if ( $howmany <= 0 ) {
+        if ($howmany) {
+            if ($howmany <= 0) {
                 $howmany = 15;
             }
 
@@ -631,12 +596,11 @@ class DB
         return $this;
     }
 
-    public function limitPage($page, $perpage = 0)
-    {
-        $page    = (int) $page;
+    public function limitPage($page, $perpage = 0) {
+        $page = (int) $page;
         $perpage = (int) $perpage;
 
-        if ( $perpage <= 0 ) {
+        if ($perpage <= 0) {
             $perpage = $this->perpage;
         }
 
@@ -645,12 +609,11 @@ class DB
         return $this;
     }
 
-    public function limitPagePlus($page, $perpage = 0)
-    {
-        $page    = (int) $page;
+    public function limitPagePlus($page, $perpage = 0) {
+        $page = (int) $page;
         $perpage = (int) $perpage;
 
-        if ( $perpage <= 0 ) {
+        if ($perpage <= 0) {
             $perpage = $this->perpage;
         }
 
@@ -659,8 +622,7 @@ class DB
         return $this;
     }
 
-    public function setPerPage($perpage)
-    {
+    public function setPerPage($perpage) {
         $this->perpage = (int) $perpage;
 
         return $this;
@@ -668,46 +630,41 @@ class DB
 
     //========================================================================//
 
-    public function resetFilters()
-    {
-        $this->select        = array( 'i.*' );
-        $this->group_by      = '';
-        $this->order_by      = '';
-        $this->index_action  = '';
-        $this->limit         = '';
-        $this->read_type     = '';
-        $this->join          = '';
-        $this->distinct      = '';
+    public function resetFilters() {
+        $this->select = array('i.*');
+        $this->group_by = '';
+        $this->order_by = '';
+        $this->index_action = '';
+        $this->limit = '';
+        $this->read_type = '';
+        $this->join = '';
+        $this->distinct = '';
         $this->straight_join = '';
 
-        if ( $this->keep_filters ) {
+        if ($this->keep_filters) {
             return $this;
         }
 
         $this->filter_on = false;
-        $this->where     = '';
+        $this->where = '';
 
         return $this;
     }
 
-    public function lockFilters()
-    {
+    public function lockFilters() {
         $this->keep_filters = true;
         return $this;
     }
 
-    public function unlockFilters()
-    {
+    public function unlockFilters() {
         $this->keep_filters = false;
         return $this;
     }
 
-    public function filterStart()
-    {
-        if ( $this->filter_on ) {
+    public function filterStart() {
+        if ($this->filter_on) {
             $this->where .= ' ' . $this->where_separator . ' (';
-        }
-        else {
+        } else {
             $this->where .= '(';
         }
 
@@ -716,31 +673,26 @@ class DB
         return $this;
     }
 
-    public function filterEnd()
-    {
+    public function filterEnd() {
         $this->where .= ' ) ';
         return $this;
     }
 
-    public function filterAnd()
-    {
+    public function filterAnd() {
         $this->where_separator = ' AND ';
         return $this;
     }
 
-    public function filterOr()
-    {
+    public function filterOr() {
         $this->where_separator = ' OR ';
         return $this;
     }
 
-    public function filter($condition)
-    {
-        if ( $this->filter_on ) {
+    public function filter($condition) {
+        if ($this->filter_on) {
             $this->where .= ' ' . $this->where_separator . ' (' . $condition . ')';
-        }
-        else {
-            $this->where     .= '(' . $condition . ')';
+        } else {
+            $this->where .= '(' . $condition . ')';
             $this->filter_on = true;
         }
 
@@ -749,20 +701,16 @@ class DB
         return $this;
     }
 
-    public function filterEqual($field, $value, $binary = false)
-    {
-        if ( is_null($value) ) {
+    public function filterEqual($field, $value, $binary = false) {
+        if (is_null($value)) {
             return $this->filterIsNull($field);
         }
 
-        $value = $this->db->escape($value);
-
-        return $this->filter(($binary ? ' BINARY ' : '') . $field . " = '" . $value . "'");
+        return $this->filter(($binary ? ' BINARY ' : '') . $field . " = '" . $this->db->escape($value) . "'");
     }
 
-    public function filterNotEqual($field, $value)
-    {
-        if ( is_null($value) ) {
+    public function filterNotEqual($field, $value) {
+        if (is_null($value)) {
             return $this->filterNotNull($field);
         }
 
@@ -771,140 +719,118 @@ class DB
         return $this->filter($this->prepareFieldName($field) . " <> '" . $value . "'");
     }
 
-    public function filterNotNull($field)
-    {
+    public function filterNotNull($field) {
         return $this->filter($this->prepareFieldName($field) . ' IS NOT NULL');
     }
 
-    public function filterIsNull($field)
-    {
+    public function filterIsNull($field) {
         return $this->filterEqual($this->prepareFieldName($field), ' IS NULL');
     }
 
-    public function filterFunc($field, $value, $sign = '=')
-    {
+    public function filterFunc($field, $value, $sign = '=') {
         return $this->filter($this->prepareFieldName($field) . " " . $sign . " " . $value);
     }
 
-    public function filterGt($field, $value)
-    {
+    public function filterGt($field, $value) {
         return $this->filterFunc($field, "'" . $this->db->escape($value) . "'", '>');
     }
 
-    public function filterLt($field, $value)
-    {
+    public function filterLt($field, $value) {
         return $this->filterFunc($field, "'" . $this->db->escape($value) . "'", '<');
     }
 
-    public function filterGtEqual($field, $value)
-    {
+    public function filterGtEqual($field, $value) {
         return $this->filterFunc($field, "'" . $this->db->escape($value) . "'", '>=');
     }
 
-    public function filterLtEqual($field, $value)
-    {
+    public function filterLtEqual($field, $value) {
         return $this->filterFunc($field, "'" . $this->db->escape($value) . "'", '<=');
     }
 
-    public function filterLike($field, $value)
-    {
+    public function filterLike($field, $value) {
         return $this->filter($this->prepareFieldName($field) . " LIKE '" . $this->db->escape($value) . "'");
     }
 
-    public function filterNotLike($field, $value)
-    {
+    public function filterNotLike($field, $value) {
         return $this->filter($this->prepareFieldName($field) . " NOT LIKE '" . $this->db->escape($value) . "'");
     }
 
-    public function filterBetween($field, $start, $end)
-    {
+    public function filterBetween($field, $start, $end) {
         return $this->filter($this->prepareFieldName($field) . " BETWEEN '" . $this->db->escape($start) . "' AND '" . $this->db->escape($value) . "'");
     }
 
-    public function filterDateYounger($field, $value, $interval = 'DAY')
-    {
+    public function filterDateYounger($field, $value, $interval = 'DAY') {
         return $this->filter($this->prepareFieldName($field) . " >= DATE_SUB(NOW(), INTERVAL " . $this->db->escape($value) . " " . $this->db->escape($interval) . ")");
     }
 
-    public function filterTimestampYounger($field, $value, $interval = 'DAY')
-    {
+    public function filterTimestampYounger($field, $value, $interval = 'DAY') {
         return $this->filter("TIMESTAMPDIFF(" . $this->db->escape($interval) . ", " . $this->prepareFieldName($field) . ", NOW()) <= " . (int) $value);
     }
 
-    public function filterDateOlder($field, $value, $interval = 'DAY')
-    {
+    public function filterDateOlder($field, $value, $interval = 'DAY') {
         return $this->filter($this->prepareFieldName($field) . " < DATE_SUB(NOW(), INTERVAL " . $this->db->escape($value) . " " . $this->db->escape($interval) . ")");
     }
 
-    public function filterTimestampGt($field, $value)
-    {
+    public function filterTimestampGt($field, $value) {
         return $this->filter("UNIX_TIMESTAMP(" . $this->prepareFieldName($field) . ") > '" . $this->db->escape($value) . "'");
     }
 
-    public function filterTimestampLt($field, $value)
-    {
+    public function filterTimestampLt($field, $value) {
         return $this->filter("UNIX_TIMESTAMP(" . $this->prepareFieldName($field) . ") < '" . $this->db->escape($value) . "'");
     }
 
-    public function filterIn($field, $value, $not = false)
-    {
-        if ( is_array($value) ) {
-            foreach ( $value as $k => $v ) {
+    public function filterIn($field, $value, $not = false) {
+        if (is_array($value)) {
+            foreach ($value as $k => $v) {
                 $value[$k] = "'" . $this->db->escape($v) . "'";
             }
 
             $value = implode(',', $value);
-        }
-        else {
+        } else {
             $value = "'" . $this->db->escape($value) . "'";
         }
         return $this->filter($this->prepareFieldName($field) . ($not === true ? " NOT" : "") . " IN (" . $value . ")");
     }
 
-    public function filterNotIn($field, $value)
-    {
+    public function filterNotIn($field, $value) {
         return $this->filterIn($field, $value, true);
     }
 
-    public function filterRelated($field, $value)
-    {
-        if ( mb_strlen($value) <= 3 ) {
+    public function filterRelated($field, $value) {
+        if (mb_strlen($value) <= 3) {
             return $this->filterLike($field, $this->db->escape($value) . '%');
         }
 
         $query = array();
 
-        $words = explode(' ', str_replace(array( '"', '\'', '+', '*', '-', '%', ')', '(', '.', ',', '!', '?' ), ' ', $value));
+        $words = explode(' ', str_replace(array('"', '\'', '+', '*', '-', '%', ')', '(', '.', ',', '!', '?'), ' ', $value));
 
-        foreach ( $words as $word ) {
+        foreach ($words as $word) {
             $word = mb_strtolower(trim($word));
 
-            if ( mb_strlen($word) < 3 || is_numeric($word) ) {
+            if (mb_strlen($word) < 3 || is_numeric($word)) {
                 continue;
             }
 
-            if ( mb_strlen($word) == 3 ) {
+            if (mb_strlen($word) == 3) {
                 $query[] = $this->db->escape($word);
                 continue;
             }
 
-            if ( mb_strlen($word) >= 12 ) {
+            if (mb_strlen($word) >= 12) {
                 $word = mb_substr($word, 0, mb_strlen($word) - 3) . '*';
-            }
-            else if ( mb_strlen($word) >= 10 ) {
+            } else if (mb_strlen($word) >= 10) {
                 $word = mb_substr($word, 0, mb_strlen($word) - 2) . '*';
-            }
-            else if ( mb_strlen($word) >= 6 ) {
+            } else if (mb_strlen($word) >= 6) {
                 $word = mb_substr($word, 0, mb_strlen($word) - 1) . '*';
             }
 
             $query[] = $this->db->escape($word);
         }
 
-        if ( empty($query) ) {
+        if (empty($query)) {
             $ft_query = '\"' . $this->db->escape($value) . '\"';
-        }
-        else {
+        } else {
             usort($query, function ($a, $b) {
                 return mb_strlen($b) - mb_strlen($a);
             });
@@ -926,65 +852,54 @@ class DB
 
     //========================================================================//
 
-    public function setStraightJoin()
-    {
+    public function setStraightJoin() {
         $this->straight_join = self::STRAIGHT_JOIN;
         return $this;
     }
 
-    public function _join($join, $table_name, $as, $on)
-    {
+    public function _join($join, $table_name, $as, $on) {
         $this->join .= $join . ' {#}' . $table_name . ' as ' . $as . ' ON ' . $on . PHP_EOL;
 
         return $this;
     }
 
-    public function join($table_name, $as, $on)
-    {
+    public function join($table_name, $as, $on) {
         return $this->joinInner($table_name, $as, $on);
     }
 
-    public function joinInner($table_name, $as, $on)
-    {
+    public function joinInner($table_name, $as, $on) {
         return _join(self::INNER_JOIN, $table_name, $as, $on);
     }
 
-    public function joinLeft($table_name, $as, $on)
-    {
+    public function joinLeft($table_name, $as, $on) {
         return _join(self::LEFT_JOIN, $table_name, $as, $on);
     }
 
-    public function joinExcludingLeft($table_name, $as, $right_key, $left_key, $join_where = '')
-    {
+    public function joinExcludingLeft($table_name, $as, $right_key, $left_key, $join_where = '') {
         $this->filter($right_key . ' IS NULL');
         return _join(self::LEFT_JOIN, $table_name, $as, $left_key . '=' . $right_key . ($join_where ? ' AND ' . $join_where : ''));
     }
 
-    public function joinRight($table_name, $as, $on)
-    {
+    public function joinRight($table_name, $as, $on) {
         return _join(self::RIGHT_JOIN, $table_name, $as, $on);
     }
 
-    public function joinExcludingRight($table_name, $as, $right_key, $left_key, $join_where = '')
-    {
+    public function joinExcludingRight($table_name, $as, $right_key, $left_key, $join_where = '') {
         $this->filter($left_key . ' IS NULL');
         return _join(self::RIGHT_JOIN, $table_name, $as, $left_key . '=' . $right_key . ($join_where ? ' AND ' . $join_where : ''));
     }
 
-    public function joinLeftOuter($table_name, $as, $on)
-    {
+    public function joinLeftOuter($table_name, $as, $on) {
         return _join(self::LEFT_OUTER_JOIN, $table_name, $as, $on);
     }
 
-    public function joinRightOuter($table_name, $as, $on)
-    {
+    public function joinRightOuter($table_name, $as, $on) {
         return _join(self::RIGHT_OUTER_JOIN, $table_name, $as, $on);
     }
 
     //========================================================================//
 
-    public function groupBy($field)
-    {
+    public function groupBy($field) {
         $this->group_by = $this->prepareFieldName($field);
 
         return $this;
@@ -997,9 +912,8 @@ class DB
      * @param int $for 1 - FOR JOIN, 2 - FOR ORDER BY, 3 - FOR GROUP BY
      * @return $this
      */
-    protected function indexHint($index_name, $action, $for = '')
-    {
-        switch ( $for ) {
+    protected function indexHint($index_name, $action, $for = '') {
+        switch ($for) {
             case 1:
                 $for_action = 'FOR JOIN';
                 break;
@@ -1019,32 +933,27 @@ class DB
         return $this;
     }
 
-    public function forceIndex($index_name, $for = '')
-    {
+    public function forceIndex($index_name, $for = '') {
         return $this->indexHint($index_name, 'FORCE', $for);
     }
 
-    public function ignoreIndex($index_name, $for = '')
-    {
+    public function ignoreIndex($index_name, $for = '') {
         return $this->indexHint($index_name, 'IGNORE', $for);
     }
 
-    public function useIndex($index_name, $for = '')
-    {
+    public function useIndex($index_name, $for = '') {
         return $this->indexHint($index_name, 'USE', $for);
     }
 
-    public function orderBy($field, $direction = '', $is_force_index_by_field = false)
-    {
-        if ( strpos($field, '(') === false ) {
+    public function orderBy($field, $direction = '', $is_force_index_by_field = false) {
+        if (strpos($field, '(') === false) {
             $this->order_by = $this->prepareFieldName($field) . ' ' . (strtolower($direction) === 'desc' ? 'desc' : 'asc');
         }
 
         return $this;
     }
 
-    public function setReadType($type)
-    {
+    public function setReadType($type) {
         $this->read_type = $type;
 
         return $this;
@@ -1053,11 +962,10 @@ class DB
     //========================================================================//
     //============================== Транзакции ==================================//
 
-    public function isAutocommitOn()
-    {
+    public function isAutocommitOn() {
         $result = $this->query('SELECT @@autocommit');
 
-        if ( $result->rowsCount() ) {
+        if ($result->rowsCount()) {
             $row = $result->fetchRow();
 
             return isset($row[0]) && $row[0] == 1;
@@ -1066,8 +974,7 @@ class DB
         return false;
     }
 
-    public function processTransaction($payload_callback, $after_autocommit_on = false)
-    {
+    public function processTransaction($payload_callback, $after_autocommit_on = false) {
         // нам не нужно, чтобы внутри транзакции при ошибке запроса
         // всё умирало
         $this->query_quiet = true;
@@ -1080,29 +987,27 @@ class DB
 
         // выключаем автокоммит, чтобы все запросы были в транзакции
         // если автокоммит выключен, то мы уже в транзакции
-        if ( $is_autocommit_on ) {
+        if ($is_autocommit_on) {
             $this->db->autocommitOff();
         }
 
         try {
-            $success = call_user_func_array($payload_callback, array( $this ));
-        }
-        catch ( Exception $e ) {
+            $success = call_user_func_array($payload_callback, array($this));
+        } catch (Exception $e) {
             self::error('Call transaction fn', $e->getMessage());
             $success = false;
         }
 
         $this->query_quiet = null;
 
-        if ( $is_autocommit_on || $after_autocommit_on ) {
+        if ($is_autocommit_on || $after_autocommit_on) {
             $this->endTransaction($success);
         }
 
         return $success;
     }
 
-    public function startTransaction()
-    {
+    public function startTransaction() {
         $this->is_transaction_started = true;
 
         $this->db->autocommitOff();
@@ -1110,12 +1015,10 @@ class DB
         return $this;
     }
 
-    public function endTransaction($success)
-    {
-        if ( $success ) {
+    public function endTransaction($success) {
+        if ($success) {
             $this->db->commit();
-        }
-        else {
+        } else {
             $this->db->rollback();
         }
 
@@ -1126,53 +1029,49 @@ class DB
         return $this;
     }
 
-    public function forUpdate()
-    {
+    public function forUpdate() {
         return $this->setReadType('FOR UPDATE');
     }
 
-    public function lockInShareMode()
-    {
+    public function lockInShareMode() {
         return $this->setReadType('LOCK IN SHARE MODE');
     }
 
-    public function setTransactionIsolationLevel($level)
-    {
+    public function setTransactionIsolationLevel($level) {
         $this->query("SET TRANSACTION ISOLATION LEVEL " . $level);
         return $this;
     }
 
     //========================================================================//
 
-    public function getSQL()
-    {
+    public function getSQL() {
         $select = implode(', ', $this->select);
 
         $sql = "SELECT {$this->distinct} {$this->straight_join} {$select}
                 FROM {#}{$this->table} i
                 {$this->index_action}";
 
-        if ( $this->join ) {
+        if ($this->join) {
             $sql .= $this->join;
         }
 
-        if ( $this->where ) {
+        if ($this->where) {
             $sql .= 'WHERE ' . $this->where . PHP_EOL;
         }
 
-        if ( $this->group_by ) {
+        if ($this->group_by) {
             $sql .= 'GROUP BY ' . $this->group_by . PHP_EOL;
         }
 
-        if ( $this->order_by ) {
+        if ($this->order_by) {
             $sql .= 'ORDER BY ' . $this->order_by . PHP_EOL;
         }
 
-        if ( $this->limit ) {
+        if ($this->limit) {
             $sql .= 'LIMIT ' . $this->limit . PHP_EOL;
         }
 
-        if ( $this->read_type ) {
+        if ($this->read_type) {
             $sql .= $this->read_type . PHP_EOL;
         }
 
@@ -1181,9 +1080,8 @@ class DB
 
     //========================================================================//
 
-    protected function prepareFieldName($field)
-    {
-        if ( strpos($field, '.') === false ) {
+    protected function prepareFieldName($field) {
+        if (strpos($field, '.') === false) {
             $field = 'i.' . $field;
         }
 
@@ -1195,9 +1093,8 @@ class DB
      * @param string $sql
      * @return string
      */
-    public function replacePrefix($sql)
-    {
-        return str_replace([ '{#}' ], [ $this->options['table_prefix'] ], $sql);
+    public function replacePrefix($sql) {
+        return str_replace(['{#}'], [$this->options['table_prefix']], $sql);
     }
 
     /**
@@ -1209,17 +1106,15 @@ class DB
      *
      * @return string
      */
-    public function prepareValue($field, $value, $array_as = 'json')
-    {
+    public function prepareValue($field, $value, $array_as = 'json') {
         $is_date_field = strpos($field, 'date_') === 0;
 
-        if ( is_array($value) ) {
-            switch ( $array_as ) {
+        if (is_array($value)) {
+            switch ($array_as) {
                 case 'yaml':
-                    if ( function_exists('yaml_emit') ) {
+                    if (function_exists('yaml_emit')) {
                         $value = $this->db->escape(yaml_emit($array, YAML_UTF8_ENCODING));
-                    }
-                    else if ( class_exists('\Symfony\Component\Yaml\Yaml') ) {
+                    } else if (class_exists('\Symfony\Component\Yaml\Yaml')) {
                         $value = $this->db->escape(\Symfony\Component\Yaml\Yaml::dump($value));
                     }
                     break;
@@ -1232,23 +1127,17 @@ class DB
             }
 
             $value = "'" . $value . "'";
-        }
-        else if ( $is_date_field && ($value === false) ) {
+        } else if ($is_date_field && ($value === false)) {
             $value = 'NULL';
-        }
-        else if ( $is_date_field && ($value == '' || is_null($value)) ) {
+        } else if ($is_date_field && ($value == '' || is_null($value))) {
             $value = 'CURRENT_TIMESTAMP';
-        }
-        else if ( is_bool($value) ) {
+        } else if (is_bool($value)) {
             $value = (int) $value;
-        }
-        else if ( $value === '' || is_null($value) ) {
+        } else if ($value === '' || is_null($value)) {
             $value = 'NULL';
-        }
-        else if ( is_callable($value) && ($value instanceof Closure) ) {
+        } else if (is_callable($value) && ($value instanceof Closure)) {
             $value = $value($this);
-        }
-        else {
+        } else {
             $value = $this->escape(trim($value));
             $value = "'" . $value . "'";
         }
@@ -1258,34 +1147,30 @@ class DB
 
     //========================================================================//
 
-    public function dropTable($table_name)
-    {
+    public function dropTable($table_name) {
         return $this->query("DROP TABLE IF EXISTS {#}" . $table_name);
     }
 
-    public function dropTableField($table_name, $field_name)
-    {
+    public function dropTableField($table_name, $field_name) {
         return $this->query("ALTER TABLE `{#}" . $table_name . "` DROP `" . $field_name . "`");
     }
 
-    public function addTableField($table_name, $field_name, $sql)
-    {
+    public function addTableField($table_name, $field_name, $sql) {
 
-        if ( $this->isFieldExists($table_name, $field_name) ) {
+        if ($this->isFieldExists($table_name, $field_name)) {
             return false;
         }
 
         return $this->query("ALTER TABLE `{#}" . $table_name . "` ADD `" . $field_name . "` " . $sql);
     }
 
-    public function isTableExists($table_name)
-    {
+    public function isTableExists($table_name) {
 
         $result = $this->query('show tables');
 
         $tables = [];
 
-        while ( $data = $this->fetchRow($result) ) {
+        while ($data = $this->fetchRow($result)) {
             $tables[] = $data[0];
         }
 
@@ -1294,84 +1179,81 @@ class DB
         return in_array($table_name, $tables, true);
     }
 
-    public function createTable($table_name, $structure, $engine = 'MYISAM')
-    {
+    public function createTable($table_name, $structure, $engine = 'MYISAM') {
         $sql = "CREATE TABLE IF NOT EXISTS `{#}" . $table_name . "` (" . PHP_EOL;
 
         $fcount = 0;
         $ftotal = sizeof($structure);
 
-        $indexes         = $fulltext        = $unique          = $indexes_created = [];
+        $indexes = $fulltext = $unique = $indexes_created = [];
 
-        foreach ( $structure as $name => $field ) {
+        foreach ($structure as $name => $field) {
             $fcount++;
             $sep = ($fcount == $ftotal) ? PHP_EOL : "," . PHP_EOL;
 
-            $default  = (!isset($field['default']) ? 'NULL' : "NOT NULL DEFAULT '" . $field['default'] . "'");
+            $default = (!isset($field['default']) ? 'NULL' : "NOT NULL DEFAULT '" . $field['default'] . "'");
             $unsigned = (!isset($field['unsigned']) ? '' : 'UNSIGNED');
 
             // обычный индекс
-            if ( isset($field['index']) ) {
-                if ( $field['index'] === true ) {
-                    $indexes[$name] = array( $name );
-                }
-                else if ( is_string($field['index']) ) {
+            if (isset($field['index'])) {
+                if ($field['index'] === true) {
+                    $indexes[$name] = array($name);
+                } else if (is_string($field['index'])) {
                     $indexes[$field['index']][$field['composite_index']] = $name;
-                }
-                else if ( is_array($field['index']) ) {
-                    foreach ( $field['index'] as $k => $i_name ) {
+                } else if (is_array($field['index'])) {
+                    foreach ($field['index'] as $k => $i_name) {
                         $indexes[$i_name][$field['composite_index'][$k]] = $name;
                     }
                 }
             }
 
             // уникальный индекс
-            if ( isset($field['unique']) ) {
+            if (isset($field['unique'])) {
                 $unique[] = $name;
             }
 
             // полнотекстовый индекс
-            if ( isset($field['fulltext']) ) {
-                if ( $field['fulltext'] === true ) {
-                    $fulltext[$name] = array( $name );
+            if (isset($field['fulltext'])) {
+                if ($field['fulltext'] === true) {
+                    $fulltext[$name] = array($name);
                 }
             }
 
-            switch ( $field['type'] ) {
+            switch ($field['type']) {
                 case 'primary':
-                    $sql     .= "\t`" . $name . "` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY" . $sep;
+                    $sql .= "\t`" . $name . "` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY" . $sep;
                     break;
                 case 'bool':
-                    $sql     .= "\t`" . $name . "` tinyint(1) UNSIGNED " . $default . "" . $sep;
+                    $sql .= "\t`" . $name . "` tinyint(1) UNSIGNED " . $default . "" . $sep;
                     break;
                 case 'timestamp':
                     $current = (isset($field['default_current']) && $field['default_current'] == true) ? "NOT NULL DEFAULT CURRENT_TIMESTAMP" : 'NULL';
-                    $sql     .= "\t`" . $name . "` TIMESTAMP " . $current . "" . $sep;
+                    $sql .= "\t`" . $name . "` TIMESTAMP " . $current . "" . $sep;
                     break;
                 case 'tinyint':
-                    $sql     .= "\t`" . $name . "` TINYINT " . $unsigned . " " . $default . "" . $sep;
+                    $sql .= "\t`" . $name . "` TINYINT " . $unsigned . " " . $default . "" . $sep;
                     break;
                 case 'int':
-                    if ( !isset($field['size']) ) {
+                    if (!isset($field['size'])) {
                         $field['size'] = 11;
                     }
                     $sql .= "\t`" . $name . "` INT( " . $field['size'] . " ) " . $unsigned . " " . $default . "" . $sep;
                     break;
                 case 'varchar':
-                    if ( !isset($field['size']) ) {
+                    if (!isset($field['size'])) {
                         $field['size'] = 255;
                     }
-                    $sql    .= "\t`" . $name . "` VARCHAR( " . $field['size'] . " ) " . $default . "" . $sep;
+                    $sql .= "\t`" . $name . "` VARCHAR( " . $field['size'] . " ) " . $default . "" . $sep;
                     break;
                 case 'text':
-                    $sql    .= "\t`" . $name . "` TEXT NULL" . $sep;
+                    $sql .= "\t`" . $name . "` TEXT NULL" . $sep;
                     break;
                 case 'set':
                     $values = array_map(function ($item) {
                         return '"' . $item . '"';
                     }, $field['items']);
                     $values = implode(',', $values);
-                    $sql    .= "\t`" . $name . "` SET (" . $values . ") " . $default . "" . $sep;
+                    $sql .= "\t`" . $name . "` SET (" . $values . ") " . $default . "" . $sep;
                     break;
                 default: break;
             }
@@ -1381,8 +1263,8 @@ class DB
 
         $this->query($sql);
 
-        foreach ( $indexes as $index_name => $fields ) {
-            if ( in_array($index_name, $indexes_created) ) {
+        foreach ($indexes as $index_name => $fields) {
+            if (in_array($index_name, $indexes_created)) {
                 continue;
             }
 
@@ -1391,8 +1273,8 @@ class DB
             $indexes_created[] = $index_name;
         }
 
-        foreach ( $unique as $field ) {
-            if ( in_array($field, $indexes_created) ) {
+        foreach ($unique as $field) {
+            if (in_array($field, $indexes_created)) {
                 continue;
             }
 
@@ -1401,8 +1283,8 @@ class DB
             $indexes_created[] = $field;
         }
 
-        foreach ( $fulltext as $index_name => $fields ) {
-            if ( in_array($index_name, $indexes_created) ) {
+        foreach ($fulltext as $index_name => $fields) {
+            if (in_array($index_name, $indexes_created)) {
                 continue;
             }
 
@@ -1412,22 +1294,20 @@ class DB
         }
     }
 
-    public function isFieldUnique($table_name, $field_name, $value, $exclude_row_id = false)
-    {
+    public function isFieldUnique($table_name, $field_name, $value, $exclude_row_id = false) {
 
         $value = $this->escape(trim($value));
 
         $where = "(`{$field_name}` = '{$value}')";
 
-        if ( $exclude_row_id ) {
+        if ($exclude_row_id) {
             $where .= " AND (id <> '{$exclude_row_id}')";
         }
 
         return !(bool) $this->getRowsCount($table_name, $where, 1);
     }
 
-    public function isFieldExists($table_name, $field)
-    {
+    public function isFieldExists($table_name, $field) {
 
         $table_fields = $this->getTableFields($table_name);
 
@@ -1441,19 +1321,17 @@ class DB
      * @param string $index_name Название индекса
      * @return array|boolean
      */
-    public function getIndex($table, $index_name)
-    {
+    public function getIndex($table, $index_name) {
         $result = $this->query("SHOW INDEX FROM  `{#}" . $table . "` WHERE `Key_name` =  '" . $index_name . "'");
 
-        if ( $result->rowsCount() ) {
+        if ($result->rowsCount()) {
             $fields = array();
 
-            while ( $i = $result->fetchAssoc() ) {
+            while ($i = $result->fetchAssoc()) {
                 $fields[] = $i['Column_name'];
             }
             return $fields;
-        }
-        else {
+        } else {
             return false;
         }
     }
@@ -1464,19 +1342,18 @@ class DB
      * @param string $index_type Тип индекса
      * @return boolean|array
      */
-    public function getTableIndexes($table, $index_type = null)
-    {
+    public function getTableIndexes($table, $index_type = null) {
         $sql = "SHOW INDEX FROM  `{#}" . $table . "`";
-        if ( $index_type ) {
+        if ($index_type) {
             $sql .= " WHERE `Index_type` = '" . $index_type . "'";
         }
 
         $result = $this->query($sql);
 
-        if ( $result->rowsCount() ) {
+        if ($result->rowsCount()) {
             $indexes = array();
 
-            while ( $i = $result->fetchAssoc() ) {
+            while ($i = $result->fetchAssoc()) {
                 $indexes[$i['Key_name']][] = $i['Column_name'];
             }
 
@@ -1492,8 +1369,7 @@ class DB
      * @param string $index_name Название индекса
      * @return boolean
      */
-    public function isIndexExists($table, $index_name)
-    {
+    public function isIndexExists($table, $index_name) {
         return $this->getIndex($table, $index_name) !== false;
     }
 
@@ -1503,9 +1379,8 @@ class DB
      * @param string $index_name Название индекса
      * @return boolean
      */
-    public function dropIndex($table, $index_name)
-    {
-        if ( $this->isIndexExists($table, $index_name) ) {
+    public function dropIndex($table, $index_name) {
+        if ($this->isIndexExists($table, $index_name)) {
             $this->query("ALTER TABLE `{#}" . $table . "` DROP INDEX `" . $index_name . "`");
             return true;
         }
@@ -1521,18 +1396,17 @@ class DB
      * @param string $index_type Тип индекса
      * @return boolean FALSE если индекс с таким названием уже есть
      */
-    public function addIndex($table, $fields, $index_name = '', $index_type = 'INDEX')
-    {
+    public function addIndex($table, $fields, $index_name = '', $index_type = 'INDEX') {
 
-        if ( is_string($fields) ) {
-            $fields = array( $fields );
+        if (is_string($fields)) {
+            $fields = array($fields);
         }
 
-        if ( !$index_name ) {
+        if (!$index_name) {
             $index_name = end($fields);
         }
 
-        if ( $this->isIndexExists($table, $index_name) ) {
+        if ($this->isIndexExists($table, $index_name)) {
             return false;
         }
 
@@ -1547,8 +1421,11 @@ class DB
 
     //========================================================================//
 
-    public function __call($name, $arguments)
-    {
-        return call_user_func_array(array( $this->db, $name ), $arguments);
+    public function __call($name, $arguments) {
+        return call_user_func_array(array($this->db, $name), $arguments);
+    }
+
+    public function getDebug() {
+        return $this->_debug;
     }
 }

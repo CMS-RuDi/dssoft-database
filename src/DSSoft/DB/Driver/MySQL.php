@@ -4,8 +4,7 @@ namespace DSSoft\DB\Driver;
 
 use DSSoft\DB\Result\MySQL_Result;
 
-class MySQL implements DBInterface
-{
+class MySQL implements DBInterface {
 
     protected $mysqli;
     protected $db_con_time;
@@ -22,22 +21,19 @@ class MySQL implements DBInterface
      */
     private $reconnect_time = 60;
 
-    public function __construct()
-    {
+    public function __construct() {
         mysqli_report(MYSQLI_REPORT_OFF);
 
         $this->mysqli = new \mysqli();
     }
 
-    protected function _connect()
-    {
-        if ( !$this->status() ) {
+    protected function _connect() {
+        if (!$this->status()) {
             @ $this->mysqli->connect($this->host, $this->user, $this->password, $this->dbase, !empty($this->options['port']) ? $this->options['port'] : null, !empty($this->options['socket']) ? $this->options['socket'] : null);
 
-            if ( !$this->mysqli->connect_error ) {
+            if (!$this->mysqli->connect_error) {
                 $this->setParams();
-            }
-            else {
+            } else {
                 \DSSoft\DB::error('MySqli Connection Error', $this->mysqli->connect_error);
                 return false;
             }
@@ -48,128 +44,112 @@ class MySQL implements DBInterface
         return true;
     }
 
-    public function connect($host, $user, $password, $dbase, $options = [])
-    {
-        if ( $host != $this->host || $user != $this->user || $password != $this->password || $dbase != $this->dbase ) {
+    public function connect($host, $user, $password, $dbase, $options = []) {
+        if ($host != $this->host || $user != $this->user || $password != $this->password || $dbase != $this->dbase) {
             $this->close();
 
-            $this->host     = $host;
-            $this->user     = $user;
+            $this->host = $host;
+            $this->user = $user;
             $this->password = $password;
-            $this->dbase    = $dbase;
-            $this->options  = $options;
+            $this->dbase = $dbase;
+            $this->options = $options;
         }
 
         return $this->_connect();
     }
 
-    public function reconnect()
-    {
+    public function reconnect() {
         $this->close();
         $this->_connect();
     }
 
-    public function status()
-    {
+    public function status() {
         return @ $this->mysqli->ping();
     }
 
-    public function close()
-    {
-        if ( !$this->ConError() && $this->status() ) {
+    public function close() {
+        if (!$this->ConError() && $this->status()) {
             $this->mysqli->close();
         }
     }
 
-    public function lastId()
-    {
+    public function lastId() {
         return $this->mysqli->insert_id;
     }
 
-    public function query($sql)
-    {
-        if ( PHP_SAPI == 'cli' && (time() - $this->db_con_time) >= $this->reconnect_time ) {
+    public function query($sql) {
+        if (PHP_SAPI == 'cli' && (time() - $this->db_con_time) >= $this->reconnect_time) {
             $this->reconnect();
         }
 
         $result = $this->mysqli->query($sql);
 
-        if ( !$this->mysqli->errno ) {
-            if ( $result instanceof \mysqli_result ) {
+        if (!$this->mysqli->errno) {
+            if ($result instanceof \mysqli_result) {
                 return new MySQL_Result($result);
             }
-
-            return $result;
         }
+
+        return $result;
     }
 
-    public function affectedRows()
-    {
+    public function affectedRows() {
         return $this->mysqli->affected_rows;
     }
 
-    public function escape($string)
-    {
+    public function escape($string) {
         return $this->mysqli->real_escape_string($string);
     }
 
-    protected function setParams()
-    {
-        if ( !empty($this->options['charset']) ) {
+    protected function setParams() {
+        if (!empty($this->options['charset'])) {
             $this->mysqli->set_charset($this->options['charset']);
         }
 
-        if ( !empty($this->options['clear_sql_mode']) ) {
+        if (!empty($this->options['clear_sql_mode'])) {
             $this->mysqli->query("SET sql_mode=''");
         }
 
         $this->mysqli->query("SET `time_zone` = '" . date('P') . "'");
 
-        if ( defined('LC_LANGUAGE_TERRITORY') ) {
+        if (defined('LC_LANGUAGE_TERRITORY')) {
             $this->mysqli->query("SET lc_messages = '" . LC_LANGUAGE_TERRITORY . "'");
         }
     }
 
-    public function Error()
-    {
-        if ( $this->mysqli->errno ) {
+    public function Error() {
+        if ($this->mysqli->errno) {
             return '#' . $this->mysqli->errno . ': ' . $this->mysqli->error;
         }
     }
 
-    public function ConError()
-    {
+    public function ConError() {
         return $this->mysqli->connect_error;
     }
 
     //========================================================================//
 
-    public function autocommitOn()
-    {
+    public function autocommitOn() {
         $this->mysqli->autocommit(true);
         return $this;
     }
 
-    public function autocommitOff()
-    {
+    public function autocommitOff() {
         $this->mysqli->autocommit(false);
         return $this;
     }
 
-    public function rollback()
-    {
+    public function rollback() {
         $this->mysqli->rollback();
         return $this;
     }
 
-    public function commit()
-    {
+    public function commit() {
         $this->mysqli->commit();
         return $this;
     }
 
-    public function beginTransaction()
-    {
+    public function beginTransaction() {
         $this->mysqli->begin_transaction();
         return $this;
     }
