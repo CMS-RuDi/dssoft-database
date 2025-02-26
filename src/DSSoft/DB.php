@@ -239,7 +239,7 @@ class DB {
 
         $result = $this->query($sql);
 
-        if (!$result->rowsCount()) {
+        if ($result === false || !$result->rowsCount()) {
             return false;
         }
 
@@ -277,7 +277,7 @@ class DB {
 
         $result = $this->query($sql);
 
-        if (!$result->rowsCount()) {
+        if ($result === false || !$result->rowsCount()) {
             return false;
         }
 
@@ -325,7 +325,7 @@ class DB {
 
         $result = $this->query($sql);
 
-        if (!$result->rowsCount()) {
+        if ($result === false || !$result->rowsCount()) {
             $count = 0;
         } else {
             $count = (int) $result->fetchRow()[0];
@@ -351,7 +351,7 @@ class DB {
 
         $result = $this->query($sql);
 
-        if (!$result->rowsCount()) {
+        if ($result === false || !$result->rowsCount()) {
             return false;
         }
 
@@ -965,13 +965,13 @@ class DB {
     public function isAutocommitOn() {
         $result = $this->query('SELECT @@autocommit');
 
-        if ($result->rowsCount()) {
-            $row = $result->fetchRow();
-
-            return isset($row[0]) && $row[0] == 1;
+        if ($result === false || !$result->rowsCount()) {
+            return false;
         }
 
-        return false;
+        $row = $result->fetchRow();
+
+        return isset($row[0]) && $row[0] == 1;
     }
 
     public function processTransaction($payload_callback, $after_autocommit_on = false) {
@@ -1324,16 +1324,17 @@ class DB {
     public function getIndex($table, $index_name) {
         $result = $this->query("SHOW INDEX FROM  `{#}" . $table . "` WHERE `Key_name` =  '" . $index_name . "'");
 
-        if ($result->rowsCount()) {
-            $fields = array();
-
-            while ($i = $result->fetchAssoc()) {
-                $fields[] = $i['Column_name'];
-            }
-            return $fields;
-        } else {
+        if ($result === false || !$result->rowsCount()) {
             return false;
         }
+
+        $fields = array();
+
+        while ($i = $result->fetchAssoc()) {
+            $fields[] = $i['Column_name'];
+        }
+
+        return $fields;
     }
 
     /**
@@ -1350,17 +1351,17 @@ class DB {
 
         $result = $this->query($sql);
 
-        if ($result->rowsCount()) {
-            $indexes = array();
-
-            while ($i = $result->fetchAssoc()) {
-                $indexes[$i['Key_name']][] = $i['Column_name'];
-            }
-
-            return $indexes;
+        if ($result === false || !$result->rowsCount()) {
+            return false;
         }
 
-        return false;
+        $indexes = array();
+
+        while ($i = $result->fetchAssoc()) {
+            $indexes[$i['Key_name']][] = $i['Column_name'];
+        }
+
+        return $indexes;
     }
 
     /**
