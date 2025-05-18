@@ -3,7 +3,6 @@
 namespace DSSoft;
 
 class DBSingeltone {
-
     protected static $_instance;
     protected static $_db;
 

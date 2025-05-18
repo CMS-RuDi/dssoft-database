@@ -3,7 +3,6 @@
 namespace DSSoft;
 
 class DB {
-
     /**
      * Типы JOIN
      */
@@ -868,33 +867,33 @@ class DB {
     }
 
     public function joinInner($table_name, $as, $on) {
-        return _join(self::INNER_JOIN, $table_name, $as, $on);
+        return $this->_join(self::INNER_JOIN, $table_name, $as, $on);
     }
 
     public function joinLeft($table_name, $as, $on) {
-        return _join(self::LEFT_JOIN, $table_name, $as, $on);
+        return $this->_join(self::LEFT_JOIN, $table_name, $as, $on);
     }
 
     public function joinExcludingLeft($table_name, $as, $right_key, $left_key, $join_where = '') {
         $this->filter($right_key . ' IS NULL');
-        return _join(self::LEFT_JOIN, $table_name, $as, $left_key . '=' . $right_key . ($join_where ? ' AND ' . $join_where : ''));
+        return $this->_join(self::LEFT_JOIN, $table_name, $as, $left_key . '=' . $right_key . ($join_where ? ' AND ' . $join_where : ''));
     }
 
     public function joinRight($table_name, $as, $on) {
-        return _join(self::RIGHT_JOIN, $table_name, $as, $on);
+        return $this->_join(self::RIGHT_JOIN, $table_name, $as, $on);
     }
 
     public function joinExcludingRight($table_name, $as, $right_key, $left_key, $join_where = '') {
         $this->filter($left_key . ' IS NULL');
-        return _join(self::RIGHT_JOIN, $table_name, $as, $left_key . '=' . $right_key . ($join_where ? ' AND ' . $join_where : ''));
+        return $this->_join(self::RIGHT_JOIN, $table_name, $as, $left_key . '=' . $right_key . ($join_where ? ' AND ' . $join_where : ''));
     }
 
     public function joinLeftOuter($table_name, $as, $on) {
-        return _join(self::LEFT_OUTER_JOIN, $table_name, $as, $on);
+        return $this->_join(self::LEFT_OUTER_JOIN, $table_name, $as, $on);
     }
 
     public function joinRightOuter($table_name, $as, $on) {
-        return _join(self::RIGHT_OUTER_JOIN, $table_name, $as, $on);
+        return $this->_join(self::RIGHT_OUTER_JOIN, $table_name, $as, $on);
     }
 
     //========================================================================//
