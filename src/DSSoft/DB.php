@@ -212,10 +212,8 @@ class DB {
     }
 
     public function selectOnly($field, $as = false) {
-        $this->select = array();
-        $this->select[] = $as ? $field . ' as `' . $as . '`' : $field;
-
-        return $this;
+        $this->select = [];
+        return $this->select($field, $as);
     }
 
     //========================================================================//
@@ -705,7 +703,7 @@ class DB {
             return $this->filterIsNull($field);
         }
 
-        return $this->filter(($binary ? ' BINARY ' : '') . $field . " = '" . $this->db->escape($value) . "'");
+        return $this->filter(($binary ? ' BINARY ' : '') . $this->prepareFieldName($field) . " = '" . $this->db->escape($value) . "'");
     }
 
     public function filterNotEqual($field, $value) {
@@ -755,7 +753,7 @@ class DB {
     }
 
     public function filterBetween($field, $start, $end) {
-        return $this->filter($this->prepareFieldName($field) . " BETWEEN '" . $this->db->escape($start) . "' AND '" . $this->db->escape($value) . "'");
+        return $this->filter($this->prepareFieldName($field) . " BETWEEN '" . $this->db->escape($start) . "' AND '" . $this->db->escape($end) . "'");
     }
 
     public function filterDateYounger($field, $value, $interval = 'DAY') {
@@ -899,7 +897,15 @@ class DB {
     //========================================================================//
 
     public function groupBy($field) {
-        $this->group_by = $this->prepareFieldName($field);
+        if (is_array($field)) {
+            foreach ($field as $k => $v) {
+                $field[$k] = $this->prepareFieldName($v);
+            }
+
+            $this->group_by = implode(", ", $field);
+        } else {
+            $this->group_by = $this->prepareFieldName($field);
+        }
 
         return $this;
     }
@@ -992,7 +998,7 @@ class DB {
 
         try {
             $success = call_user_func_array($payload_callback, array($this));
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             self::error('Call transaction fn', $e->getMessage());
             $success = false;
         }
@@ -1079,9 +1085,12 @@ class DB {
 
     //========================================================================//
 
-    protected function prepareFieldName($field) {
+    protected function prepareFieldName($field, $i = true) {
         if (strpos($field, '.') === false) {
-            $field = 'i.' . $field;
+            $field = "`" . $field . "`";
+            if ($i) {
+                $field = "i." . $field;
+            }
         }
 
         return $field;
@@ -1134,7 +1143,7 @@ class DB {
             $value = (int) $value;
         } else if ($value === '' || is_null($value)) {
             $value = 'NULL';
-        } else if (is_callable($value) && ($value instanceof Closure)) {
+        } else if (is_callable($value) && ($value instanceof \Closure)) {
             $value = $value($this);
         } else {
             $value = $this->escape(trim($value));
