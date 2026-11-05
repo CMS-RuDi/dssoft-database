@@ -7,12 +7,14 @@ use DSSoft\DB\Result\MySQL_Result;
 class MySQL implements DBInterface {
 
     protected $mysqli;
-    protected $db_con_time;
+    protected $connected = false;
+    protected $connect_error = null;
+    protected $db_con_time = 0;
     protected $host;
     protected $user;
     protected $password;
     protected $dbase;
-    protected $options;
+    protected $options = [];
 
     /**
      * Время, через которое при PHP_SAPI == 'cli' нужно сделать реконнект
@@ -28,24 +30,37 @@ class MySQL implements DBInterface {
     }
 
     protected function _connect() {
-        if (!$this->status()) {
-            @ $this->mysqli->connect($this->host, $this->user, $this->password, $this->dbase, !empty($this->options['port']) ? $this->options['port'] : null, !empty($this->options['socket']) ? $this->options['socket'] : null);
-
-            if (!$this->mysqli->connect_error) {
-                $this->setParams();
-            } else {
-                \DSSoft\DB::error('MySqli Connection Error', $this->mysqli->connect_error);
-                return false;
-            }
-
-            $this->db_con_time = time();
+        if ($this->status()) {
+            return true;
         }
+
+        // новое соединение создаём на чистом объекте mysqli,
+        // чтобы не зависеть от состояния предыдущего (не)удачного подключения
+        $this->mysqli = new \mysqli();
+        $this->connected = false;
+
+        $port = !empty($this->options['port']) ? (int) $this->options['port'] : null;
+        $socket = !empty($this->options['socket']) ? $this->options['socket'] : null;
+
+        @ $this->mysqli->connect($this->host, $this->user, $this->password, $this->dbase, $port, $socket);
+
+        if ($this->mysqli->connect_error) {
+            // текст ошибки доступен через ConError(), логирует его DSSoft\DB::connect()
+            $this->connect_error = $this->mysqli->connect_error;
+            return false;
+        }
+
+        $this->connected = true;
+        $this->connect_error = null;
+        $this->db_con_time = time();
+
+        $this->setParams();
 
         return true;
     }
 
     public function connect($host, $user, $password, $dbase, $options = []) {
-        if ($host != $this->host || $user != $this->user || $password != $this->password || $dbase != $this->dbase) {
+        if ($host != $this->host || $user != $this->user || $password != $this->password || $dbase != $this->dbase || $options != $this->options) {
             $this->close();
 
             $this->host = $host;
@@ -60,50 +75,87 @@ class MySQL implements DBInterface {
 
     public function reconnect() {
         $this->close();
-        $this->_connect();
+        return $this->_connect();
     }
 
     public function status() {
+        // ping() нельзя вызывать на закрытом/неинициализированном объекте mysqli
+        if (!$this->connected) {
+            return false;
+        }
+
         return @ $this->mysqli->ping();
     }
 
     public function close() {
-        if (!$this->ConError() && $this->status()) {
-            $this->mysqli->close();
+        if (!$this->connected) {
+            return;
         }
+
+        @ $this->mysqli->close();
+
+        $this->connected = false;
+        $this->db_con_time = 0;
     }
 
     public function lastId() {
-        return $this->mysqli->insert_id;
+        return $this->connected ? $this->mysqli->insert_id : false;
     }
 
     public function query($sql) {
-        if (PHP_SAPI == 'cli' && (time() - $this->db_con_time) >= $this->reconnect_time) {
+        if (!$this->connected) {
+            $this->_connect();
+        }
+
+        if (PHP_SAPI == 'cli' && $this->db_con_time > 0 && (time() - $this->db_con_time) >= $this->reconnect_time) {
             $this->reconnect();
         }
 
-        $result = $this->mysqli->query($sql);
+        $result = @ $this->mysqli->query($sql);
 
-        if (!$this->mysqli->errno) {
-            if ($result instanceof \mysqli_result) {
-                return new MySQL_Result($result);
-            }
+        // 2006 — MySQL server has gone away, 2013 — lost connection during query
+        if ($result === false && in_array($this->mysqli->errno, array(2006, 2013), true)) {
+            $this->reconnect();
+
+            $result = @ $this->mysqli->query($sql);
+        }
+
+        if ($this->mysqli->errno) {
+            return false;
+        }
+
+        if ($result instanceof \mysqli_result) {
+            return new MySQL_Result($result);
         }
 
         return $result;
     }
 
     public function affectedRows() {
-        return $this->mysqli->affected_rows;
+        return $this->connected ? $this->mysqli->affected_rows : 0;
     }
 
     public function escape($string) {
-        return $this->mysqli->real_escape_string($string);
+        if (!$this->connected) {
+            // экранирование невозможно без соединения (и без знания кодировки)
+            $this->_connect();
+        }
+
+        $escaped = @ $this->mysqli->real_escape_string((string) $string);
+
+        if ($escaped === false || $escaped === null) {
+            return addslashes((string) $string);
+        }
+
+        return $escaped;
     }
 
     protected function setParams() {
-        if (!empty($this->options['charset'])) {
-            $this->mysqli->set_charset($this->options['charset']);
+        // опция может называться и charset, и db_charset (как в cmsDatabase)
+        $charset = !empty($this->options['charset']) ? $this->options['charset'] : (!empty($this->options['db_charset']) ? $this->options['db_charset'] : '');
+
+        if ($charset) {
+            @ $this->mysqli->set_charset($charset);
         }
 
         if (!empty($this->options['clear_sql_mode'])) {
@@ -118,39 +170,60 @@ class MySQL implements DBInterface {
     }
 
     public function Error() {
+        if (!$this->connected) {
+            return $this->connect_error;
+        }
+
         if ($this->mysqli->errno) {
             return '#' . $this->mysqli->errno . ': ' . $this->mysqli->error;
         }
+
+        return null;
     }
 
     public function ConError() {
-        return $this->mysqli->connect_error;
+        return $this->connect_error;
     }
 
     //========================================================================//
 
     public function autocommitOn() {
-        $this->mysqli->autocommit(true);
+        if ($this->connected) {
+            $this->mysqli->autocommit(true);
+        }
+
         return $this;
     }
 
     public function autocommitOff() {
-        $this->mysqli->autocommit(false);
+        if ($this->connected) {
+            $this->mysqli->autocommit(false);
+        }
+
         return $this;
     }
 
     public function rollback() {
-        $this->mysqli->rollback();
+        if ($this->connected) {
+            $this->mysqli->rollback();
+        }
+
         return $this;
     }
 
     public function commit() {
-        $this->mysqli->commit();
+        if ($this->connected) {
+            $this->mysqli->commit();
+        }
+
         return $this;
     }
 
     public function beginTransaction() {
-        $this->mysqli->begin_transaction();
+        if ($this->connected) {
+            $this->mysqli->begin_transaction();
+        }
+
         return $this;
     }
 

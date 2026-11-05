@@ -39,6 +39,12 @@ class DB {
      */
     protected $_debug;
     protected $_cache = array('table_fields' => array());
+
+    /**
+     * Стек состояний filter_on для вложенных групп filterStart()/filterEnd()
+     * @var array
+     */
+    protected $_filter_stack = array();
     //========================================================================//
     public $table = '';
     public $select = array('i.*');
@@ -85,6 +91,12 @@ class DB {
 
         $this->db = new $class_name();
 
+        if (!$this->db instanceof DB\Driver\DBInterface) {
+            $this->db = null;
+            $this->_debug->error('CONNECT_DB', array('msg' => 'Driver ' . $class_name . ' does not implement DBInterface'));
+            return false;
+        }
+
         $this->db->connect($this->db_host, $this->db_user, $this->db_password, $this->db_name, $this->options);
 
         if ($this->db->ConError()) {
@@ -97,17 +109,29 @@ class DB {
     }
 
     public function reconnect($forced = false) {
+        if (!$this->db instanceof DB\Driver\DBInterface) {
+            return false;
+        }
+
         if ($forced === true || !$this->db->status()) {
             $this->db->reconnect();
         }
+
+        return true;
     }
 
     public function ConError() {
+        if (!$this->db instanceof DB\Driver\DBInterface) {
+            return 'Database driver is not connected';
+        }
+
         return $this->db->ConError();
     }
 
     public function __destruct() {
-        $this->db->close();
+        if ($this->db instanceof DB\Driver\DBInterface) {
+            $this->db->close();
+        }
     }
 
     //========================================================================//
@@ -126,11 +150,16 @@ class DB {
 
         $fields = array();
 
-        while ($data = $result->fetchAssoc()) {
-            $fields[] = $data['Field'];
+        if ($result) {
+            while ($data = $result->fetchAssoc()) {
+                $fields[] = $data['Field'];
+            }
         }
 
-        $this->_cache['table_fields'][$table] = $fields;
+        // не кешируем пустой результат: таблицы может ещё не быть
+        if ($fields) {
+            $this->_cache['table_fields'][$table] = $fields;
+        }
 
         return $fields;
     }
@@ -141,12 +170,14 @@ class DB {
      * @return array
      */
     public function getTableFieldsTypes($table) {
-        $result = $this->query("SELECT DATA_TYPE, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE table_name = '{#}" . $table . "'");
+        $result = $this->query("SELECT DATA_TYPE, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '{#}" . $table . "'");
 
         $fields = [];
 
-        while ($data = $result->fetchAssoc()) {
-            $fields[$data['COLUMN_NAME']] = $data['DATA_TYPE'];
+        if ($result) {
+            while ($data = $result->fetchAssoc()) {
+                $fields[$data['COLUMN_NAME']] = $data['DATA_TYPE'];
+            }
         }
 
         return $fields;
@@ -164,6 +195,10 @@ class DB {
      * @return boolean|DB\Result\ResultInterface
      */
     public function query($sql, $params = false, $quiet = false) {
+        if (!$this->db instanceof DB\Driver\DBInterface) {
+            return false;
+        }
+
         $this->_debug->startTimer('DB_QUERY');
 
         $sql = $this->replacePrefix($sql);
@@ -174,7 +209,11 @@ class DB {
             }
 
             foreach ($params as $index => $param) {
-                if (!is_numeric($param)) {
+                if ($param === null) {
+                    $params[$index] = 'NULL';
+                } elseif (is_bool($param)) {
+                    $params[$index] = $param ? '1' : '0';
+                } elseif (!is_numeric($param)) {
                     $params[$index] = $this->db->escape($param);
                 }
             }
@@ -248,7 +287,7 @@ class DB {
     public function getItem($table_name, $item_callback = false) {
         $select = implode(', ', $this->select);
 
-        $sql = "SELECT {$select}
+        $sql = "SELECT {$this->distinct} {$this->straight_join} {$select}
                 FROM {#}{$table_name} i
                 {$this->index_action}";
 
@@ -258,6 +297,10 @@ class DB {
 
         if ($this->where) {
             $sql .= 'WHERE ' . $this->where . PHP_EOL;
+        }
+
+        if ($this->group_by) {
+            $sql .= 'GROUP BY ' . $this->group_by . PHP_EOL;
         }
 
         if ($this->order_by) {
@@ -349,7 +392,7 @@ class DB {
         $result = $this->query($sql);
 
         if ($result === false || !$result->rowsCount()) {
-            return false;
+            return $items;
         }
 
         while ($item = $result->fetchAssoc()) {
@@ -363,7 +406,7 @@ class DB {
                 }
             }
 
-            if ($key) {
+            if ($key !== false) {
                 $items[$key] = $item;
             } else {
                 $items[] = $item;
@@ -386,7 +429,11 @@ class DB {
 
         $this->resetFilters();
 
-        $this->_delete($table_name, $where);
+        if (!$where) {
+            return false;
+        }
+
+        return $this->_delete($table_name, $where);
     }
 
     /**
@@ -396,7 +443,16 @@ class DB {
      * @return boolean
      */
     public function _delete($table_name, $where) {
-        return $this->query("DELETE FROM {#}" . $table_name . " WHERE " . str_replace('i.', '', $where));
+        $where = (string) $where;
+
+        if ($where === '') {
+            return false;
+        }
+
+        // фильтры строятся с алиасом "i", поэтому удаляем через многотабличный
+        // синтаксис DELETE: он позволяет использовать алиас и не портит
+        // строковые значения заменой "i."
+        return $this->query("DELETE i FROM {#}" . $table_name . " i WHERE " . $where);
     }
 
     //========================================================================//
@@ -411,6 +467,10 @@ class DB {
         $where = $this->where;
 
         $this->resetFilters();
+
+        if (!$where) {
+            return false;
+        }
 
         return $this->_update($table_name, $where, $data, $skip_check_fields, $array_as);
     }
@@ -427,7 +487,11 @@ class DB {
      * @return boolean
      */
     public function _update($table, $where, $data, $skip_check_fields = false, $array_as = 'json') {
-        if (empty($data)) {
+        if (empty($data) || !is_array($data)) {
+            return false;
+        }
+
+        if (!$where) {
             return false;
         }
 
@@ -438,7 +502,7 @@ class DB {
         $set = [];
 
         foreach ($data as $field => $value) {
-            if (!$skip_check_fields && !in_array($field, $table_fields)) {
+            if (!$skip_check_fields && !in_array($field, $table_fields, true)) {
                 continue;
             }
 
@@ -450,6 +514,14 @@ class DB {
         }
 
         return $this->query("UPDATE {#}" . $table . " i SET " . implode(', ', $set) . " WHERE " . $where);
+    }
+
+    public function getAffectedRows() {
+        if (!$this->db instanceof DB\Driver\DBInterface) {
+            return 0;
+        }
+
+        return $this->db->affectedRows();
     }
 
     //========================================================================//
@@ -509,33 +581,54 @@ class DB {
      * @return boolean|int|string
      */
     public function insertOrUpdate($table, $data, $update_data = false, $skip_check_fields = false, $array_as = 'json') {
+        if (empty($data) || !is_array($data)) {
+            return false;
+        }
+
+        if (!$skip_check_fields) {
+            $table_fields = $this->getTableFields($table);
+        }
+
         $fields = $values = $set = [];
 
-        if (is_array($data)) {
-            foreach ($data as $field => $value) {
-                $value = $this->prepareValue($field, $value, $array_as);
-
-                $fields[] = "`" . $field . "`";
-                $values[] = $value;
-
-                if ($update_data === false) {
-                    $set[] = "`" . $field . "` = " . $value;
-                }
+        foreach ($data as $field => $value) {
+            if (!$skip_check_fields && !in_array($field, $table_fields, true)) {
+                continue;
             }
 
-            $sql = "INSERT INTO {#}" . $table . " (" . implode(', ', $fields) . ")\nVALUES (" . implode(', ', $values) . ")";
+            $value = $this->prepareValue($field, $value, $array_as);
 
-            if (is_array($update_data)) {
-                foreach ($update_data as $field => $value) {
-                    $set[] = "`" . $field . "` = " . $this->prepareValue($field, $value, $array_as);
-                }
+            $fields[] = "`" . $field . "`";
+            $values[] = $value;
+
+            if ($update_data === false) {
+                $set[] = "`" . $field . "` = " . $value;
             }
+        }
 
+        if (!$fields) {
+            return false;
+        }
+
+        if (is_array($update_data)) {
+            foreach ($update_data as $field => $value) {
+                if (!$skip_check_fields && !in_array($field, $table_fields, true)) {
+                    continue;
+                }
+
+                $set[] = "`" . $field . "` = " . $this->prepareValue($field, $value, $array_as);
+            }
+        }
+
+        $sql = "INSERT INTO {#}" . $table . " (" . implode(', ', $fields) . ")\nVALUES (" . implode(', ', $values) . ")";
+
+        // без списка обновляемых полей "ON DUPLICATE KEY UPDATE" — синтаксическая ошибка
+        if ($set) {
             $sql .= " ON DUPLICATE KEY UPDATE " . implode(', ', $set);
+        }
 
-            if ($this->query($sql)) {
-                return $this->db->lastId();
-            }
+        if ($this->query($sql)) {
+            return $this->db->lastId();
         }
 
         return false;
@@ -544,10 +637,16 @@ class DB {
     //========================================================================//
 
     public function increment($table, $field, $step = 1) {
+        if (!preg_match('/^[A-Za-z0-9_]+$/', (string) $field)) {
+            return false;
+        }
+
+        $step = (int) $step;
+
         $sign = $step > 0 ? '+' : '-';
         $step = abs($step);
 
-        $sql = "UPDATE {#}" . $table . " i " . PHP_EOL . "SET i." . $field . " = i." . $field . " " . $sign . " " . $step . PHP_EOL;
+        $sql = "UPDATE {#}" . $table . " i " . PHP_EOL . "SET i.`" . $field . "` = i.`" . $field . "` " . $sign . " " . $step . PHP_EOL;
 
         if ($this->where) {
             $sql .= 'WHERE ' . $this->where;
@@ -565,11 +664,14 @@ class DB {
     //========================================================================//
 
     public function replaceFieldString($table_name, $search, $replace, $field) {
+        if (!preg_match('/^[A-Za-z0-9_]+$/', (string) $field)) {
+            return false;
+        }
 
         $search = $this->db->escape($search);
         $replace = $this->db->escape($replace);
 
-        return $this->query("UPDATE `{#}{$table_name}` SET `{$field}` = REPLACE(`{$field}`, '{$search}', '$replace') WHERE `{$field}` LIKE '%{$search}%'");
+        return $this->query("UPDATE `{#}{$table_name}` SET `{$field}` = REPLACE(`{$field}`, '{$search}', '{$replace}') WHERE `{$field}` LIKE '%{$search}%'");
     }
 
     //========================================================================//
@@ -644,6 +746,7 @@ class DB {
 
         $this->filter_on = false;
         $this->where = '';
+        $this->_filter_stack = array();
 
         return $this;
     }
@@ -665,13 +768,23 @@ class DB {
             $this->where .= '(';
         }
 
+        // запоминаем состояние, чтобы filterEnd() вернул корректный разделитель
+        $this->_filter_stack[] = $this->filter_on;
+
         $this->filter_on = false;
+        $this->where_separator = ' AND ';
 
         return $this;
     }
 
     public function filterEnd() {
         $this->where .= ' ) ';
+
+        // закрытая группа — такое же условие, как и одиночный filter()
+        array_pop($this->_filter_stack);
+        $this->filter_on = true;
+        $this->where_separator = ' AND ';
+
         return $this;
     }
 
@@ -721,7 +834,7 @@ class DB {
     }
 
     public function filterIsNull($field) {
-        return $this->filterEqual($this->prepareFieldName($field), ' IS NULL');
+        return $this->filter($this->prepareFieldName($field) . ' IS NULL');
     }
 
     public function filterFunc($field, $value, $sign = '=') {
@@ -778,14 +891,21 @@ class DB {
 
     public function filterIn($field, $value, $not = false) {
         if (is_array($value)) {
+            if (!$value) {
+                // IN () — синтаксическая ошибка MySQL, поэтому пустой список
+                // заменяем на заведомо ложное/истинное условие
+                return $this->filter($not === true ? '1 = 1' : '1 = 0');
+            }
+
             foreach ($value as $k => $v) {
-                $value[$k] = "'" . $this->db->escape($v) . "'";
+                $value[$k] = is_null($v) ? 'NULL' : "'" . $this->db->escape($v) . "'";
             }
 
             $value = implode(',', $value);
         } else {
-            $value = "'" . $this->db->escape($value) . "'";
+            $value = is_null($value) ? 'NULL' : "'" . $this->db->escape($value) . "'";
         }
+
         return $this->filter($this->prepareFieldName($field) . ($not === true ? " NOT" : "") . " IN (" . $value . ")");
     }
 
@@ -795,7 +915,7 @@ class DB {
 
     public function filterRelated($field, $value) {
         if (mb_strlen($value) <= 3) {
-            return $this->filterLike($field, $this->db->escape($value) . '%');
+            return $this->filterLike($field, $value . '%');
         }
 
         $query = array();
@@ -826,7 +946,7 @@ class DB {
         }
 
         if (empty($query)) {
-            $ft_query = '\"' . $this->db->escape($value) . '\"';
+            $ft_query = '"' . $this->db->escape($value) . '"';
         } else {
             usort($query, function ($a, $b) {
                 return mb_strlen($b) - mb_strlen($a);
@@ -834,7 +954,7 @@ class DB {
 
             $query = array_slice($query, 0, 5);
 
-            $ft_query = '>\"' . $this->db->escape($value) . '\" <(';
+            $ft_query = '>"' . $this->db->escape($value) . '" <(';
             $ft_query .= implode(' ', $query) . ')';
         }
 
@@ -950,10 +1070,13 @@ class DB {
         return $this->indexHint($index_name, 'USE', $for);
     }
 
-    public function orderBy($field, $direction = '', $is_force_index_by_field = false) {
+    public function orderBy($field, $direction = '') {
+        // сортировка по выражению (RAND(), COUNT(*) и т.п.) не должна теряться
         if (strpos($field, '(') === false) {
-            $this->order_by = $this->prepareFieldName($field) . ' ' . (strtolower($direction) === 'desc' ? 'desc' : 'asc');
+            $field = $this->prepareFieldName($field);
         }
+
+        $this->order_by = $field . ' ' . (strtolower($direction) === 'desc' ? 'desc' : 'asc');
 
         return $this;
     }
@@ -980,6 +1103,9 @@ class DB {
     }
 
     public function processTransaction($payload_callback, $after_autocommit_on = false) {
+        // запоминаем предыдущее значение: транзакции могут быть вложенными
+        $prev_query_quiet = $this->query_quiet;
+
         // нам не нужно, чтобы внутри транзакции при ошибке запроса
         // всё умирало
         $this->query_quiet = true;
@@ -992,18 +1118,23 @@ class DB {
 
         // выключаем автокоммит, чтобы все запросы были в транзакции
         // если автокоммит выключен, то мы уже в транзакции
-        if ($is_autocommit_on) {
+        if ($is_autocommit_on && $this->db instanceof DB\Driver\DBInterface) {
             $this->db->autocommitOff();
         }
 
         try {
             $success = call_user_func_array($payload_callback, array($this));
         } catch (\Exception $e) {
-            self::error('Call transaction fn', $e->getMessage());
+            // метод self::error() отсутствует, логируем через объект отладки
+            $this->_debug->error('TRANSACTION', array('msg' => $e->getMessage()));
+            $success = false;
+        } catch (\Throwable $e) {
+            // PHP 7+: Error не является Exception, но транзакцию всё равно нужно откатить
+            $this->_debug->error('TRANSACTION', array('msg' => $e->getMessage()));
             $success = false;
         }
 
-        $this->query_quiet = null;
+        $this->query_quiet = $prev_query_quiet;
 
         if ($is_autocommit_on || $after_autocommit_on) {
             $this->endTransaction($success);
@@ -1015,12 +1146,19 @@ class DB {
     public function startTransaction() {
         $this->is_transaction_started = true;
 
-        $this->db->autocommitOff();
+        if ($this->db instanceof DB\Driver\DBInterface) {
+            $this->db->autocommitOff();
+        }
 
         return $this;
     }
 
     public function endTransaction($success) {
+        if (!$this->db instanceof DB\Driver\DBInterface) {
+            $this->is_transaction_started = false;
+            return $this;
+        }
+
         if ($success) {
             $this->db->commit();
         } else {
@@ -1080,7 +1218,8 @@ class DB {
             $sql .= $this->read_type . PHP_EOL;
         }
 
-        return $sql;
+        // getSQL() публичный и должен возвращать готовый к выполнению запрос
+        return $this->replacePrefix($sql);
     }
 
     //========================================================================//
@@ -1121,9 +1260,12 @@ class DB {
             switch ($array_as) {
                 case 'yaml':
                     if (function_exists('yaml_emit')) {
-                        $value = $this->db->escape(yaml_emit($array, YAML_UTF8_ENCODING));
+                        $value = $this->db->escape(yaml_emit($value, YAML_UTF8_ENCODING));
                     } else if (class_exists('\Symfony\Component\Yaml\Yaml')) {
                         $value = $this->db->escape(\Symfony\Component\Yaml\Yaml::dump($value));
+                    } else {
+                        // нет ни расширения yaml, ни Symfony/Yaml — не теряем данные
+                        $value = $this->db->escape(json_encode($value));
                     }
                     break;
                 case 'serialize':
@@ -1137,16 +1279,16 @@ class DB {
             $value = "'" . $value . "'";
         } else if ($is_date_field && ($value === false)) {
             $value = 'NULL';
-        } else if ($is_date_field && ($value == '' || is_null($value))) {
+        } else if ($is_date_field && ($value === '' || $value === 0 || $value === '0' || is_null($value))) {
             $value = 'CURRENT_TIMESTAMP';
         } else if (is_bool($value)) {
             $value = (int) $value;
         } else if ($value === '' || is_null($value)) {
             $value = 'NULL';
-        } else if (is_callable($value) && ($value instanceof \Closure)) {
+        } else if ($value instanceof \Closure) {
             $value = $value($this);
         } else {
-            $value = $this->escape(trim($value));
+            $value = $this->db->escape(trim((string) $value));
             $value = "'" . $value . "'";
         }
 
@@ -1173,18 +1315,21 @@ class DB {
     }
 
     public function isTableExists($table_name) {
+        $result = $this->query('SHOW TABLES');
 
-        $result = $this->query('show tables');
-
-        $tables = [];
-
-        while ($data = $this->fetchRow($result)) {
-            $tables[] = $data[0];
+        if (!$result) {
+            return false;
         }
 
         $table_name = $this->replacePrefix('{#}' . $table_name);
 
-        return in_array($table_name, $tables, true);
+        while ($data = $result->fetchRow()) {
+            if ($data[0] === $table_name) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function createTable($table_name, $structure, $engine = 'MYISAM') {
@@ -1199,7 +1344,7 @@ class DB {
             $fcount++;
             $sep = ($fcount == $ftotal) ? PHP_EOL : "," . PHP_EOL;
 
-            $default = (!isset($field['default']) ? 'NULL' : "NOT NULL DEFAULT '" . $field['default'] . "'");
+            $default = (!isset($field['default']) ? 'NULL' : "NOT NULL DEFAULT '" . $this->db->escape($field['default']) . "'");
             $unsigned = (!isset($field['unsigned']) ? '' : 'UNSIGNED');
 
             // обычный индекс
@@ -1207,10 +1352,13 @@ class DB {
                 if ($field['index'] === true) {
                     $indexes[$name] = array($name);
                 } else if (is_string($field['index'])) {
-                    $indexes[$field['index']][$field['composite_index']] = $name;
+                    $position = isset($field['composite_index']) ? $field['composite_index'] : 0;
+                    $indexes[$field['index']][$position] = $name;
                 } else if (is_array($field['index'])) {
+                    $composite_index = isset($field['composite_index']) ? $field['composite_index'] : array();
                     foreach ($field['index'] as $k => $i_name) {
-                        $indexes[$i_name][$field['composite_index'][$k]] = $name;
+                        $position = isset($composite_index[$k]) ? $composite_index[$k] : $k;
+                        $indexes[$i_name][$position] = $name;
                     }
                 }
             }
@@ -1225,6 +1373,10 @@ class DB {
                 if ($field['fulltext'] === true) {
                     $fulltext[$name] = array($name);
                 }
+            }
+
+            if (!isset($field['type'])) {
+                continue;
             }
 
             switch ($field['type']) {
@@ -1267,9 +1419,11 @@ class DB {
             }
         }
 
-        $sql .= ") ENGINE=" . $engine . " DEFAULT CHARSET=" . $this->options['db_charset'];
+        $charset = !empty($this->options['db_charset']) ? $this->options['db_charset'] : 'utf8';
 
-        $this->query($sql);
+        $sql .= ") ENGINE=" . $engine . " DEFAULT CHARSET=" . $charset;
+
+        $result = $this->query($sql);
 
         foreach ($indexes as $index_name => $fields) {
             if (in_array($index_name, $indexes_created)) {
@@ -1300,19 +1454,18 @@ class DB {
 
             $indexes_created[] = $index_name;
         }
+
+        return $result;
     }
 
     public function isFieldUnique($table_name, $field_name, $value, $exclude_row_id = false) {
-
-        $value = $this->escape(trim($value));
-
-        $where = "(`{$field_name}` = '{$value}')";
+        $this->filterEqual($field_name, $value);
 
         if ($exclude_row_id) {
-            $where .= " AND (id <> '{$exclude_row_id}')";
+            $this->filter($this->prepareFieldName('id') . " <> '" . $this->db->escape($exclude_row_id) . "'");
         }
 
-        return !(bool) $this->getRowsCount($table_name, $where, 1);
+        return $this->getCount($table_name, 'id', true) == 0;
     }
 
     public function isFieldExists($table_name, $field) {
@@ -1330,19 +1483,21 @@ class DB {
      * @return array|boolean
      */
     public function getIndex($table, $index_name) {
-        $result = $this->query("SHOW INDEX FROM  `{#}" . $table . "` WHERE `Key_name` =  '" . $index_name . "'");
+        $result = $this->query("SHOW INDEX FROM `{#}" . $table . "` WHERE `Key_name` = '" . $this->db->escape($index_name) . "'");
 
-        if ($result === false || !$result->rowsCount()) {
+        if ($result === false || !is_object($result) || !$result->rowsCount()) {
             return false;
         }
 
         $fields = array();
 
         while ($i = $result->fetchAssoc()) {
-            $fields[] = $i['Column_name'];
+            $fields[(int) $i['Seq_in_index']] = $i['Column_name'];
         }
 
-        return $fields;
+        ksort($fields);
+
+        return array_values($fields);
     }
 
     /**
@@ -1352,21 +1507,26 @@ class DB {
      * @return boolean|array
      */
     public function getTableIndexes($table, $index_type = null) {
-        $sql = "SHOW INDEX FROM  `{#}" . $table . "`";
+        $sql = "SHOW INDEX FROM `{#}" . $table . "`";
         if ($index_type) {
-            $sql .= " WHERE `Index_type` = '" . $index_type . "'";
+            $sql .= " WHERE `Index_type` = '" . $this->db->escape($index_type) . "'";
         }
 
         $result = $this->query($sql);
 
-        if ($result === false || !$result->rowsCount()) {
+        if ($result === false || !is_object($result) || !$result->rowsCount()) {
             return false;
         }
 
         $indexes = array();
 
         while ($i = $result->fetchAssoc()) {
-            $indexes[$i['Key_name']][] = $i['Column_name'];
+            $indexes[$i['Key_name']][(int) $i['Seq_in_index']] = $i['Column_name'];
+        }
+
+        foreach ($indexes as $key => $fields) {
+            ksort($fields);
+            $indexes[$key] = array_values($fields);
         }
 
         return $indexes;
@@ -1390,7 +1550,7 @@ class DB {
      */
     public function dropIndex($table, $index_name) {
         if ($this->isIndexExists($table, $index_name)) {
-            $this->query("ALTER TABLE `{#}" . $table . "` DROP INDEX `" . $index_name . "`");
+            $this->query("ALTER TABLE `{#}" . $table . "` DROP INDEX `" . $this->db->escape($index_name) . "`");
             return true;
         }
 
@@ -1431,7 +1591,24 @@ class DB {
     //========================================================================//
 
     public function __call($name, $arguments) {
+        if (!$this->db instanceof DB\Driver\DBInterface) {
+            return false;
+        }
+
         return call_user_func_array(array($this->db, $name), $arguments);
+    }
+
+    /**
+     * Экранирует строку для использования в SQL запросе
+     * @param string $string
+     * @return string
+     */
+    public function escape($string) {
+        if (!$this->db instanceof DB\Driver\DBInterface) {
+            return false;
+        }
+
+        return $this->db->escape($string);
     }
 
     public function getDebug() {

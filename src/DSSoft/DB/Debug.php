@@ -12,9 +12,12 @@ class Debug {
     }
 
     public function log($name, $data, $error = false) {
+        // таймер мог быть не запущен (например, ошибка возникла до его запуска)
+        $start_time = isset($this->_timer[$name]) ? $this->_timer[$name] : microtime(true);
+
         $this->_log[] = array(
-            'start_time' => $this->_timer[$name],
-            'execution_time' => number_format(microtime(true) - $this->_timer[$name], 5),
+            'start_time' => $start_time,
+            'execution_time' => number_format(microtime(true) - $start_time, 5),
             'name' => $name,
             'data' => $data,
             'error' => $error

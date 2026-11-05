@@ -27,6 +27,8 @@ class MySQL_Result implements ResultInterface {
     }
 
     public function __destruct() {
-        $this->_result->free();
+        if ($this->_result instanceof \mysqli_result) {
+            $this->_result->free();
+        }
     }
 }
