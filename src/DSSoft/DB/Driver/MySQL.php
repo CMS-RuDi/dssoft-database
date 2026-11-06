@@ -5,7 +5,6 @@ namespace DSSoft\DB\Driver;
 use DSSoft\DB\Result\MySQL_Result;
 
 class MySQL implements DBInterface {
-
     protected $mysqli;
     protected $connected = false;
     protected $connect_error = null;
@@ -39,8 +38,8 @@ class MySQL implements DBInterface {
         $this->mysqli = new \mysqli();
         $this->connected = false;
 
-        $port = !empty($this->options['port']) ? (int) $this->options['port'] : null;
-        $socket = !empty($this->options['socket']) ? $this->options['socket'] : null;
+        $port = !empty($this->options['db_port']) ? (int) $this->options['db_port'] : null;
+        $socket = !empty($this->options['db_socket']) ? $this->options['db_socket'] : null;
 
         @ $this->mysqli->connect($this->host, $this->user, $this->password, $this->dbase, $port, $socket);
 
@@ -151,11 +150,8 @@ class MySQL implements DBInterface {
     }
 
     protected function setParams() {
-        // опция может называться и charset, и db_charset (как в cmsDatabase)
-        $charset = !empty($this->options['charset']) ? $this->options['charset'] : (!empty($this->options['db_charset']) ? $this->options['db_charset'] : '');
-
-        if ($charset) {
-            @ $this->mysqli->set_charset($charset);
+        if ($this->options['db_charset']) {
+            @ $this->mysqli->set_charset($this->options['db_charset']);
         }
 
         if (!empty($this->options['clear_sql_mode'])) {
