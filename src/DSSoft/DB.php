@@ -59,12 +59,13 @@ class DB {
     public $join = '';
     public $read_type = '';
     public $perpage = 50;
+    public $default_perpage = 50;
     public $is_transaction_started = false;
     public $filter_on = false;
     public $keep_filters = false;
     public $query_quiet = false;
 
-    public function __construct($host, $user, $password, $dbname, $type = 'MySQL', $options = array()) {
+    public function __construct($host, $user, $password, $dbname = null, $type = 'MySQL', $options = array()) {
         $this->db_type = $type;
         $this->db_host = $host;
         $this->db_user = $user;
@@ -108,6 +109,13 @@ class DB {
         }
     }
 
+    public function status() {
+        if (!$this->db instanceof DB\Driver\DBInterface) {
+            return false;
+        }
+        return $this->db->status();
+    }
+
     public function reconnect($forced = false) {
         if (!$this->db instanceof DB\Driver\DBInterface) {
             return false;
@@ -118,6 +126,14 @@ class DB {
         }
 
         return true;
+    }
+
+    public function ErrorNo() {
+        if (!$this->db instanceof DB\Driver\DBInterface) {
+            return 0;
+        }
+
+        return (int) $this->db->ErrorNo();
     }
 
     public function ConError() {
@@ -735,6 +751,7 @@ class DB {
         $this->order_by = '';
         $this->index_action = '';
         $this->limit = '';
+        $this->perpage = $this->default_perpage;
         $this->read_type = '';
         $this->join = '';
         $this->distinct = '';
@@ -762,14 +779,20 @@ class DB {
     }
 
     public function filterStart() {
+        $where_length = strlen($this->where);
+
         if ($this->filter_on) {
             $this->where .= ' ' . $this->where_separator . ' (';
         } else {
             $this->where .= '(';
         }
 
-        // запоминаем состояние, чтобы filterEnd() вернул корректный разделитель
-        $this->_filter_stack[] = $this->filter_on;
+        // запоминаем состояние, чтобы filterEnd() корректно закрыл (или убрал пустую) группу
+        $this->_filter_stack[] = array(
+            'filter_on' => $this->filter_on,
+            'where_length' => $where_length,
+            'open_length' => strlen($this->where) - $where_length,
+        );
 
         $this->filter_on = false;
         $this->where_separator = ' AND ';
@@ -778,10 +801,20 @@ class DB {
     }
 
     public function filterEnd() {
+        $group = array_pop($this->_filter_stack);
+
+        // в группе не было ни одного условия: убираем её целиком, иначе в SQL попадёт "()"
+        if ($group !== null && strlen($this->where) === $group['where_length'] + $group['open_length']) {
+            $this->where = substr($this->where, 0, $group['where_length']);
+            $this->filter_on = $group['filter_on'];
+            $this->where_separator = ' AND ';
+
+            return $this;
+        }
+
         $this->where .= ' ) ';
 
         // закрытая группа — такое же условие, как и одиночный filter()
-        array_pop($this->_filter_stack);
         $this->filter_on = true;
         $this->where_separator = ' AND ';
 
@@ -1225,6 +1258,8 @@ class DB {
     //========================================================================//
 
     protected function prepareFieldName($field, $i = true) {
+        $field = preg_replace('/[^a-zA-Z0-9_\$#@.]/u', '', (string) $field);
+
         if (strpos($field, '.') === false) {
             $field = "`" . $field . "`";
             if ($i) {
@@ -1240,8 +1275,12 @@ class DB {
      * @param string $sql
      * @return string
      */
-    public function replacePrefix($sql) {
-        return str_replace(['{#}'], [$this->options['table_prefix']], $sql);
+    public function replacePrefix($sql, $prefix = null) {
+        $_prefix = ['{#}'];
+        if (!empty($prefix)) {
+            $_prefix[] = (string) $prefix;
+        }
+        return str_replace($_prefix, [$this->options['table_prefix']], $sql);
     }
 
     /**
@@ -1293,6 +1332,26 @@ class DB {
         }
 
         return $value;
+    }
+
+    //========================================================================//
+
+    /**
+     * Создаёт базу данных, если её нет
+     *
+     * @param string $name
+     *
+     * @return bool
+     */
+    public function createDatabase($name) {
+        if (!preg_match('/^[A-Za-z0-9_\-]+$/', $name)) {
+            $this->_debug->error("CREATE_DATABASE", ['msg' => "Invalid database name"]);
+            return false;
+        }
+
+        $sql = 'CREATE DATABASE IF NOT EXISTS `' . str_replace('`', '``', $name) . '` DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci';
+
+        return $this->query($sql);
     }
 
     //========================================================================//

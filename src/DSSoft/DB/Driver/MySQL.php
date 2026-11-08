@@ -58,7 +58,7 @@ class MySQL implements DBInterface {
         return true;
     }
 
-    public function connect($host, $user, $password, $dbase, $options = []) {
+    public function connect($host, $user, $password, $dbase = null, $options = []) {
         if ($host != $this->host || $user != $this->user || $password != $this->password || $dbase != $this->dbase || $options != $this->options) {
             $this->close();
 
@@ -171,14 +171,22 @@ class MySQL implements DBInterface {
         }
 
         if ($this->mysqli->errno) {
-            return '#' . $this->mysqli->errno . ': ' . $this->mysqli->error;
+            return '#' . $this->ErrorNo() . ': ' . $this->mysqli->error;
         }
 
         return null;
     }
 
+    public function ErrorNo() {
+        if (!$this->connected) {
+            return 0;
+        }
+
+        return (int) $this->mysqli->errno;
+    }
+
     public function ConError() {
-        return $this->connect_error;
+        return $this->mysqli->connect_error;
     }
 
     //========================================================================//

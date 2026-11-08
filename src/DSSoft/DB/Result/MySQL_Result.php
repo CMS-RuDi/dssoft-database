@@ -3,7 +3,6 @@
 namespace DSSoft\DB\Result;
 
 class MySQL_Result implements ResultInterface {
-
     private $_result;
 
     public function __construct($result) {
@@ -30,5 +29,9 @@ class MySQL_Result implements ResultInterface {
         if ($this->_result instanceof \mysqli_result) {
             $this->_result->free();
         }
+    }
+
+    public function getOriginalResult() {
+        return $this->_result;
     }
 }

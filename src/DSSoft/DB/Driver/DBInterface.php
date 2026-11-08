@@ -64,6 +64,12 @@ interface DBInterface {
     public function Error();
 
     /**
+     * Возвращает числовой код ошибки подключения (например, 1049)
+     * @return int
+     */
+    public function ErrorNo();
+
+    /**
      * Возвращает текст ошибки при подключении или null если ошибки не было
      * @return string|null
      */
